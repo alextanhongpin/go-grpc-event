@@ -41,7 +41,7 @@ serve-gateway:
 	go run gateway/main.go -port ${GATEWAY_PORT} -addr localhost${SERVER_PORT}
 
 post:
-	curl -X POST -d '{"data": {"name":"hello", "start_date": 123, "uri": "test_uri"} }' http://localhost:9090/v1/events
+	curl -X POST -d '{"data": {"name":"hello", "start_date": 1505254724582, "uri": "test_uri"} }' http://localhost:9090/v1/events
 
 get-all:
 	curl http://localhost:9090/v1/events

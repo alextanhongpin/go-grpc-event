@@ -7,6 +7,7 @@ import (
 	"net"
 	"time"
 
+	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 
 	"github.com/alextanhongpin/go-engineersmy-event/app/database"
@@ -75,8 +76,8 @@ func (s eventServer) CreateEvent(ctx context.Context, msg *pb.CreateEventRequest
 
 	c := s.db.Collection(sess, "events")
 
-	msg.Data.CreatedAt = time.Now().Unix()
-	msg.Data.UpdatedAt = time.Now().Unix()
+	msg.Data.CreatedAt = time.Now().UnixNano() / 1000000
+	msg.Data.UpdatedAt = time.Now().UnixNano() / 1000000
 
 	if err := c.Insert(msg.Data); err != nil {
 		return nil, err
@@ -101,7 +102,7 @@ func (s eventServer) UpdateEvent(ctx context.Context, msg *pb.UpdateEventRequest
 		"name":       msg.Data.Name,
 		"uri":        msg.Data.Uri,
 		"start_date": msg.Data.StartDate,
-		"updated_at": time.Now().Unix(),
+		"updated_at": time.Now().UnixNano() / 1000000,
 	}
 
 	if len(msg.Data.Tags) != 0 {
@@ -186,6 +187,15 @@ func main() {
 		log.Fatalf("error connecting to db: %v\n", err)
 	}
 	defer db.Close()
+
+	db.Ref.SetMode(mgo.Monotonic, true)
+	c := db.Collection(db.Ref, "events")
+
+	if err := c.EnsureIndex(mgo.Index{
+		Key: []string{"$text:name"},
+	}); err != nil {
+		log.Printf("error creating index: %v\n", err)
+	}
 
 	grpcServer := grpc.NewServer()
 	pb.RegisterEventServiceServer(grpcServer, &eventServer{

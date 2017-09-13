@@ -9,6 +9,7 @@ import (
 	"github.com/golang/glog"
 
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
+	"github.com/rs/cors"
 	"google.golang.org/grpc"
 
 	gw "github.com/alextanhongpin/go-engineersmy-event/proto"
@@ -33,8 +34,9 @@ func run() error {
 		return err
 	}
 
+	handler := cors.Default().Handler(mux)
 	log.Printf("listening to port *%s\n", *port)
-	return http.ListenAndServe(*port, mux)
+	return http.ListenAndServe(*port, handler)
 }
 
 func main() {
