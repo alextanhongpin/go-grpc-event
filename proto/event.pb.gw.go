@@ -2,11 +2,11 @@
 // source: proto/event.proto
 
 /*
-Package event is a reverse proxy.
+Package main is a reverse proxy.
 
 It translates gRPC into RESTful JSON APIs.
 */
-package event
+package main
 
 import (
 	"io"

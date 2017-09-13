@@ -9,10 +9,11 @@ build-gateway:
 
 # setup
 setup:
-	go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
-	go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger
-	go get -u github.com/golang/protobuf/protoc-gen-go
-	go get github.com/favadi/protoc-go-inject-tag
+	brew install protobuf
+	go get -u -v github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
+	go get -u -v github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger
+	go get -u -v github.com/golang/protobuf/protoc-gen-go
+	go get -u -v github.com/favadi/protoc-go-inject-tag
 
 # stub generates the grpc server file from the proto file
 stub:
