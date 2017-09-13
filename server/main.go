@@ -1,11 +1,12 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"log"
 	"net"
 	"time"
+
+	"golang.org/x/net/context"
 
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
