@@ -5,7 +5,14 @@ build-server:
 	docker build -f server/Dockerfile -t alextanhongpin/go-grpc-event-server .
 
 build-gateway:
-	docker build -f server/Dockerfile -t alextanhongpin/go-grpc-event-gateway .
+	docker build -f gateway/Dockerfile -t alextanhongpin/go-grpc-event-gateway .
+
+# setup
+setup:
+	go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
+	go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger
+	go get -u github.com/golang/protobuf/protoc-gen-go
+	go get github.com/favadi/protoc-go-inject-tag
 
 # stub generates the grpc server file from the proto file
 stub:
@@ -22,10 +29,6 @@ gw:
 	-I${GOPATH}/src/github.com/grpc-ecosystem/grpc-gateway/third_party/googleapis \
 	--grpc-gateway_out=logtostderr=true:. \
 	proto/*.proto
-
-# install-tag downloads the binary that does the tag injection
-install-tag:
-	go get github.com/favadi/protoc-go-inject-tag
 
 # tag generates the inline tag for structs
 tag:

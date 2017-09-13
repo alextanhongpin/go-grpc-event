@@ -1,8 +1,8 @@
 FROM golang:1.9 as builder
 
-WORKDIR /go/src/github.com/alextanhongpin/go-grpc-event-gateway
+WORKDIR /go/src/github.com/alextanhongpin/go-grpc-event/gateway
 
-COPY main.go .
+COPY gateway/main.go .
 
 RUN go get -d -v
 
@@ -13,5 +13,5 @@ FROM alpine:latest
 RUN apk --no-cache add ca-certificates
 
 WORKDIR /root/
-COPY --from=builder /go/src/github.com/alextanhongpin/go-grpc-event-gateway/app .
+COPY --from=builder /go/src/github.com/alextanhongpin/go-grpc-event/gateway/app .
 CMD ["./app"]
