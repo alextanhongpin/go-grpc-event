@@ -10,8 +10,8 @@ import (
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 
-	"github.com/alextanhongpin/go-engineersmy-event/app/database"
-	pb "github.com/alextanhongpin/go-engineersmy-event/proto"
+	"github.com/alextanhongpin/go-grpc-event/app/database"
+	pb "github.com/alextanhongpin/go-grpc-event/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 )

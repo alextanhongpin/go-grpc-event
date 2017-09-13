@@ -12,7 +12,7 @@ import (
 	"github.com/rs/cors"
 	"google.golang.org/grpc"
 
-	gw "github.com/alextanhongpin/go-engineersmy-event/proto"
+	gw "github.com/alextanhongpin/go-grpc-event/proto"
 )
 
 func run() error {
