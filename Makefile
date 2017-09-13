@@ -9,6 +9,7 @@ build-gateway:
 
 # setup
 setup:
+	brew install glide
 	brew install protobuf
 	go get -u -v github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
 	go get -u -v github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger
@@ -61,3 +62,9 @@ update:
 
 update-2:
 	curl -X PATCH -d '{"data": {"uri": "cool kid"}}' http://localhost:9090/v1/events/59b6baf47270e76be612ee61 
+
+push-server:
+	docker push alextanhongpin/go-grpc-event-server
+
+push-gateway:
+	docker push alextanhongpin/go-grpc-event-gateway

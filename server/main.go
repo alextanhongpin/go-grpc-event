@@ -174,7 +174,8 @@ func (s eventServer) DeleteEvent(ctx context.Context, msg *pb.DeleteEventRequest
 
 func main() {
 	var (
-		port = flag.String("port", ":8080", "TCP port to listen on")
+		port    = flag.String("port", ":8080", "TCP port to listen on")
+		mgoHost = flag.String("mgo_host", "mongodb://localhost:27017", "MongoDB uri string")
 	)
 	flag.Parse()
 
@@ -183,7 +184,7 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	db, err := database.New()
+	db, err := database.New(database.Host(*mgoHost))
 	if err != nil {
 		log.Fatalf("error connecting to db: %v\n", err)
 	}

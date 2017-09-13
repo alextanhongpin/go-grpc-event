@@ -1,8 +1,20 @@
 version: "3"
 services:
   mongo: 
-    image: "mongo:latest"
+    image: mongo:latest
     ports:
       - 27017:27017
     volumes:
       - ./data/db:/data/db
+
+  grpc-event-server:
+    image: alextanhongpin/go-grpc-event-server:latest
+    ports:
+      - 8080:8080
+    command: ./app -port :8080 -mgo_host=mongodb://mongo:27017
+
+  grpc-event-gateway:
+    image: alextanhongpin/go-grpc-event-gateway:latest
+    ports:
+      - 9090:9090
+    command: ./app -port :9090 -addr grpc-event-server:8080

@@ -1,8 +1,10 @@
 FROM golang:1.9 as builder
 
-WORKDIR /go/src/github.com/alextanhongpin/go-grpc-event/gateway
+WORKDIR /go/src/github.com/alextanhongpin/go-grpc-event
 
-COPY gateway/main.go .
+COPY . .
+
+WORKDIR /go/src/github.com/alextanhongpin/go-grpc-event/gateway
 
 RUN go get -d -v
 
