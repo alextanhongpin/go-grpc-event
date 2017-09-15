@@ -211,7 +211,7 @@ func main() {
 	// defer closer.Close()
 
 	tracerOpts := []grpc_opentracing.Option{
-		grpc_opentracing.WithTracer(),
+		grpc_opentracing.WithTracer(nil),
 	}
 
 	// TODO: Setup database in `internals`` folder
