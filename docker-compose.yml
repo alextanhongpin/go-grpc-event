@@ -11,10 +11,27 @@ services:
     image: alextanhongpin/go-grpc-event-server:latest
     ports:
       - 8080:8080
-    command: ./app -port :8080 -mgo_host=mongodb://mongo:27017
+    command: ./app -port :8080 -mgo_host=mongodb://mongo:27017 -tracer_host=http://openzipkin:9411/api/v1/spans
 
   grpc-event-gateway:
     image: alextanhongpin/go-grpc-event-gateway:latest
     ports:
       - 9090:9090
     command: ./app -port :9090 -addr grpc-event-server:8080
+  
+  openzipkin:
+    image: openzipkin/zipkin
+    ports:
+      - 9411:9411
+    # environment:
+      # - STORAGE_PORT_3306_TCP_ADDR: 
+  
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - 5775:5775/udp # Accept zipkin.thrift over compact thrift protocol
+      - 6831:6831/udp # Accept jaeger.thrift ofer compact thrift protocol
+      - 6832:6832/udp # Accept jaeger.thrift over binary thrift protocol
+      - 5778:5778 # Serve configs
+      - 16686:16686 # Serve frontend
+      - 14268:14268 # Accept zipkin.thrift from zipkin senders

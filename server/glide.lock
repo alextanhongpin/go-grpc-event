@@ -1,11 +1,17 @@
 hash: 93acab2e06c9514af836373494afbe5b52ab905d422ad399e84c0c5048c99603
-updated: 2017-09-13T10:58:50.635023012+08:00
+updated: 2017-09-15T16:02:22.72895943+08:00
 imports:
 - name: github.com/alextanhongpin/go-grpc-event
   version: cd176e067dd2a3c8bfbcabc2868ea950f2f98457
   subpackages:
   - app/database
   - proto
+- name: github.com/apache/thrift
+  version: b2a4d4ae21c789b689dd162deb819665567f481c
+  subpackages:
+  - lib/go/thrift
+- name: github.com/codahale/hdrhistogram
+  version: f8ad88b59a584afeee9d334eff879b104439117b
 - name: github.com/golang/protobuf
   version: 17ce1425424ab154092bbb43af630bd647f3bb0d
   subpackages:
@@ -17,12 +23,39 @@ imports:
   - ptypes/duration
   - ptypes/struct
   - ptypes/timestamp
+- name: github.com/grpc-ecosystem/go-grpc-middleware
+  version: 645b33ed7ba8739747bf2df55d0349d4bba2e7f6
+  subpackages:
+  - tags
+  - tracing/opentracing
+  - util/metautils
 - name: github.com/grpc-ecosystem/grpc-gateway
   version: f2862b476edcef83412c7af8687c9cd8e4097c0f
   subpackages:
   - runtime
   - runtime/internal
   - utilities
+- name: github.com/opentracing/opentracing-go
+  version: 1949ddbfd147afd4d964a9f00b24eb291e0e7c38
+  subpackages:
+  - ext
+  - log
+- name: github.com/uber/jaeger-client-go
+  version: b7bacc465f385658dd3586f58810226776d2a4bf
+  subpackages:
+  - internal/baggage
+  - internal/spanlog
+  - log
+  - thrift-gen/agent
+  - thrift-gen/jaeger
+  - thrift-gen/sampling
+  - thrift-gen/zipkincore
+  - transport/zipkin
+  - utils
+- name: github.com/uber/jaeger-lib
+  version: 575c678b2873b62aaadd0fa5817a2aeb3155dc4d
+  subpackages:
+  - metrics
 - name: golang.org/x/net
   version: b129b8e0fbeb39c8358e51a07ab6c50ad415e72e
   subpackages:

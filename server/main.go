@@ -6,19 +6,22 @@ import (
 	"net"
 	"time"
 
+	"github.com/grpc-ecosystem/go-grpc-middleware"
+	"github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
+	"github.com/opentracing/opentracing-go"
 	"golang.org/x/net/context"
-
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 
 	"github.com/alextanhongpin/go-grpc-event/app/database"
 	pb "github.com/alextanhongpin/go-grpc-event/proto"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 )
 
 type eventServer struct {
-	db *database.Database
+	db     *database.Database
+	tracer opentracing.Tracer
 }
 
 // Event shadows the ID field to map the bson.ObjectId that is not available
@@ -31,6 +34,11 @@ type Event struct {
 func (s eventServer) GetEvents(ctx context.Context, msg *pb.GetEventsRequest) (*pb.GetEventsResponse, error) {
 	sess := s.db.Copy()
 	defer sess.Close()
+
+	span := opentracing.SpanFromContext(ctx)
+	log.Println("getting spans from get events", span)
+	// tags := grpc.Extract(ctx)
+	// log.Println("getting tags from get events", tags)
 
 	c := s.db.Collection(sess, "events")
 
@@ -123,28 +131,6 @@ func (s eventServer) UpdateEvent(ctx context.Context, msg *pb.UpdateEventRequest
 			}
 		}
 	}
-	// Optional, use reflect to check the type
-	// v := reflect.ValueOf(x)
-	// switch v.Kind() {
-	// case reflect.Bool:
-	//     fmt.Printf("bool: %v\n", v.Bool())
-	// case reflect.Int, reflect.Int8, reflect.Int32, reflect.Int64:
-	//     fmt.Printf("int: %v\n", v.Int())
-	// case reflect.Uint, reflect.Uint8, reflect.Uint32, reflect.Uint64:
-	//     fmt.Printf("int: %v\n", v.Uint())
-	// case reflect.Float32, reflect.Float64:
-	//     fmt.Printf("float: %v\n", v.Float())
-	// case reflect.String:
-	//     fmt.Printf("string: %v\n", v.String())
-	// case reflect.Slice:
-	//     fmt.Printf("slice: len=%d, %v\n", v.Len(), v.Interface())
-	// case reflect.Map:
-	//     fmt.Printf("map: %v\n", v.Interface())
-	// case reflect.Chan:
-	//     fmt.Printf("chan %v\n", v.Interface())
-	// default:
-	//     fmt.Println(x)
-	// }
 	if err := c.UpdateId(bson.ObjectIdHex(msg.Data.Id), bson.M{
 		"$set": m,
 	}); err != nil {
@@ -174,9 +160,17 @@ func (s eventServer) DeleteEvent(ctx context.Context, msg *pb.DeleteEventRequest
 
 func main() {
 	var (
-		port    = flag.String("port", ":8080", "TCP port to listen on")
-		mgoHost = flag.String("mgo_host", "mongodb://localhost:27017", "MongoDB uri string")
+		port       = flag.String("port", ":8080", "TCP port to listen on")
+		mgoHost    = flag.String("mgo_host", "mongodb://localhost:27017", "MongoDB uri string")
+		tracerHost = flag.String("tracer_host", "http://localhost:9411/api/v1/spans", "The jaeger host for opentracing")
+		tracerKind = flag.String("tracer_kind", "grpc_event", "The namespace of the tracer we are running")
 	)
+
+	log.Println("loaded port", *port)
+	log.Println("loaded mgoHost", *mgoHost)
+	log.Println("loaded tracerHost", *tracerHost)
+	log.Println("loaded tracerKind", *tracerKind)
+
 	flag.Parse()
 
 	lis, err := net.Listen("tcp", *port)
@@ -184,6 +178,43 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
+	// Jaeger transport can be initialized with a transport that will report
+	// tracing spans back to a zipkin backend
+	// transport, err := jaegerZipkin.NewHTTPTransport(
+	// 	*tracerHost,
+	// 	jaegerZipkin.HTTPBatchSize(1),
+	// 	jaegerZipkin.HTTPLogger(jaeger.StdLogger),
+	// )
+
+	// zipkinPropagator := zipkin.NewZipkinB3HTTPHeaderPropagator()
+	// injector := jaeger.TracerOptions.Injector(opentracing.HTTPHeaders, zipkinPropagator)
+	// extractor := jaeger.TracerOptions.Extractor(opentracing.HTTPHeaders, zipkinPropagator)
+	// // Zipkin shares span ID between client and server spans; it must be enabled via the following option.
+	// zipkinSharedRPCSpan := jaeger.TracerOptions.ZipkinSharedRPCSpan(true)
+
+	// if err != nil {
+	// 	log.Fatalf("Cannot initialize a HTTP transport: %v", err)
+	// }
+
+	// log.Println(transport)
+
+	// Create Jaeger tracer
+	// tracer, closer := jaeger.NewTracer(
+	// 	*tracerKind,
+	// 	jaeger.NewConstSampler(true),
+	// 	jaeger.NewRemoteReporter(transport, nil),
+	// 	// jaeger.NewNullReporter(),
+	// 	injector,
+	// 	extractor,
+	// 	zipkinSharedRPCSpan,
+	// )
+	// defer closer.Close()
+
+	tracerOpts := []grpc_opentracing.Option{
+		grpc_opentracing.WithTracer(),
+	}
+
+	// TODO: Setup database in `internals`` folder
 	db, err := database.New(database.Host(*mgoHost))
 	if err != nil {
 		log.Fatalf("error connecting to db: %v\n", err)
@@ -199,7 +230,14 @@ func main() {
 		log.Printf("error creating index: %v\n", err)
 	}
 
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(
+		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
+			grpc_opentracing.StreamServerInterceptor(tracerOpts...),
+		)),
+		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
+			grpc_opentracing.UnaryServerInterceptor(tracerOpts...),
+		)),
+	)
 	pb.RegisterEventServiceServer(grpcServer, &eventServer{
 		db: db,
 	})

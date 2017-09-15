@@ -6,7 +6,7 @@ COPY . .
 
 WORKDIR /go/src/github.com/alextanhongpin/go-grpc-event/server
 
-RUN go get -d -v
+# RUN go get -d -v
 
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o app .
 
