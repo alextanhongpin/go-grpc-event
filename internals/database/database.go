@@ -5,42 +5,42 @@ import (
 )
 
 type Options struct {
-	Host string
-	Name string
+	host string
+	name string
 }
 
 type Option func(*Options)
 
 func Host(host string) Option {
 	return func(o *Options) {
-		o.Host = host
+		o.host = host
 	}
 }
 
 func Name(name string) Option {
 	return func(o *Options) {
-		o.Name = name
+		o.name = name
 	}
 }
 
 // New returns a new database
 func New(opts ...Option) (*Database, error) {
 	options := Options{
-		Host: "localhost",
-		Name: "go-engineersmy-event",
+		host: "localhost",
+		name: "go-engineersmy-event",
 	}
 	for _, o := range opts {
 		o(&options)
 	}
 
-	sess, err := mgo.Dial(options.Host)
+	sess, err := mgo.Dial(options.host)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Database{
 		Ref:  sess,
-		Name: options.Name,
+		Name: options.name,
 	}, nil
 }
 

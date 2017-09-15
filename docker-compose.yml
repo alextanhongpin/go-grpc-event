@@ -11,7 +11,7 @@ services:
     image: alextanhongpin/go-grpc-event-server:latest
     ports:
       - 8080:8080
-    command: ./app -port :8080 -mgo_host=mongodb://mongo:27017 -tracer_host=http://openzipkin:9411/api/v1/spans
+    command: ./app -port :8080 -mgo_host mongodb://mongo:27017 -tracer_host http://openzipkin:9411/api/v1/spans
 
   grpc-event-gateway:
     image: alextanhongpin/go-grpc-event-gateway:latest

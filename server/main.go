@@ -2,8 +2,10 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"net"
+	"os"
 	"time"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware"
@@ -15,7 +17,8 @@ import (
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 
-	"github.com/alextanhongpin/go-grpc-event/app/database"
+	"github.com/alextanhongpin/go-grpc-event/internals/database"
+	"github.com/alextanhongpin/go-grpc-event/internals/tracer"
 	pb "github.com/alextanhongpin/go-grpc-event/proto"
 )
 
@@ -35,15 +38,14 @@ func (s eventServer) GetEvents(ctx context.Context, msg *pb.GetEventsRequest) (*
 	sess := s.db.Copy()
 	defer sess.Close()
 
-	span := opentracing.SpanFromContext(ctx)
-	log.Println("getting spans from get events", span)
-	// tags := grpc.Extract(ctx)
-	// log.Println("getting tags from get events", tags)
+	span, ctx := opentracing.StartSpanFromContext(ctx, "GetEvents")
+	defer span.Finish()
 
 	c := s.db.Collection(sess, "events")
 
 	var tmpEvents []Event
 	if err := c.Find(bson.M{}).All(&tmpEvents); err != nil {
+		span.SetTag("error", err.Error())
 		return nil, err
 	}
 
@@ -60,7 +62,12 @@ func (s eventServer) GetEvents(ctx context.Context, msg *pb.GetEventsRequest) (*
 }
 
 func (s eventServer) GetEvent(ctx context.Context, msg *pb.GetEventRequest) (*pb.GetEventResponse, error) {
+
+	span, ctx := opentracing.StartSpanFromContext(ctx, "GetEvent")
+	defer span.Finish()
+
 	if !bson.IsObjectIdHex(msg.Id) {
+		span.SetTag("error", "Event does not exist or has been deleted")
 		return nil, grpc.Errorf(codes.FailedPrecondition, "Event does not exist or has been deleted")
 	}
 	sess := s.db.Copy()
@@ -70,6 +77,7 @@ func (s eventServer) GetEvent(ctx context.Context, msg *pb.GetEventRequest) (*pb
 
 	var tmpEvt Event
 	if err := c.FindId(bson.ObjectIdHex(msg.Id)).One(&tmpEvt); err != nil {
+		span.SetTag("error", err.Error())
 		return nil, err
 	}
 	tmpEvt.Id = tmpEvt.ID.Hex()
@@ -80,6 +88,9 @@ func (s eventServer) GetEvent(ctx context.Context, msg *pb.GetEventRequest) (*pb
 }
 
 func (s eventServer) CreateEvent(ctx context.Context, msg *pb.CreateEventRequest) (*pb.CreateEventResponse, error) {
+	span, ctx := opentracing.StartSpanFromContext(ctx, "CreateEvent")
+	defer span.Finish()
+
 	sess := s.db.Copy()
 	defer sess.Close()
 
@@ -89,6 +100,7 @@ func (s eventServer) CreateEvent(ctx context.Context, msg *pb.CreateEventRequest
 	msg.Data.UpdatedAt = time.Now().UnixNano() / 1000000
 
 	if err := c.Insert(msg.Data); err != nil {
+		span.SetTag("error", err.Error())
 		return nil, err
 	}
 
@@ -98,7 +110,11 @@ func (s eventServer) CreateEvent(ctx context.Context, msg *pb.CreateEventRequest
 }
 
 func (s eventServer) UpdateEvent(ctx context.Context, msg *pb.UpdateEventRequest) (*pb.UpdateEventResponse, error) {
+	span, ctx := opentracing.StartSpanFromContext(ctx, "UpdateEvent")
+	defer span.Finish()
+
 	if !bson.IsObjectIdHex(msg.Data.Id) {
+		span.SetTag("error", "Event does not exist or has been deleted")
 		return nil, grpc.Errorf(codes.FailedPrecondition, "Event does not exist or has been deleted")
 	}
 	sess := s.db.Copy()
@@ -134,6 +150,7 @@ func (s eventServer) UpdateEvent(ctx context.Context, msg *pb.UpdateEventRequest
 	if err := c.UpdateId(bson.ObjectIdHex(msg.Data.Id), bson.M{
 		"$set": m,
 	}); err != nil {
+		span.SetTag("error", err.Error())
 		return nil, err
 	}
 
@@ -143,7 +160,11 @@ func (s eventServer) UpdateEvent(ctx context.Context, msg *pb.UpdateEventRequest
 }
 
 func (s eventServer) DeleteEvent(ctx context.Context, msg *pb.DeleteEventRequest) (*pb.DeleteEventResponse, error) {
+	span, ctx := opentracing.StartSpanFromContext(ctx, "DeleteEvent")
+	defer span.Finish()
+
 	if !bson.IsObjectIdHex(msg.Id) {
+		span.SetTag("error", "Event does not exist or has been deleted")
 		return nil, grpc.Errorf(codes.FailedPrecondition, "Event does not exist or has been deleted")
 	}
 	sess := s.db.Copy()
@@ -151,6 +172,7 @@ func (s eventServer) DeleteEvent(ctx context.Context, msg *pb.DeleteEventRequest
 
 	c := s.db.Collection(sess, "events")
 	if err := c.RemoveId(bson.ObjectIdHex(msg.Id)); err != nil {
+		span.SetTag("error", err.Error())
 		return nil, err
 	}
 	return &pb.DeleteEventResponse{
@@ -166,11 +188,6 @@ func main() {
 		tracerKind = flag.String("tracer_kind", "grpc_event", "The namespace of the tracer we are running")
 	)
 
-	log.Println("loaded port", *port)
-	log.Println("loaded mgoHost", *mgoHost)
-	log.Println("loaded tracerHost", *tracerHost)
-	log.Println("loaded tracerKind", *tracerKind)
-
 	flag.Parse()
 
 	lis, err := net.Listen("tcp", *port)
@@ -178,40 +195,33 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	// Jaeger transport can be initialized with a transport that will report
-	// tracing spans back to a zipkin backend
-	// transport, err := jaegerZipkin.NewHTTPTransport(
-	// 	*tracerHost,
-	// 	jaegerZipkin.HTTPBatchSize(1),
-	// 	jaegerZipkin.HTTPLogger(jaeger.StdLogger),
-	// )
-
-	// zipkinPropagator := zipkin.NewZipkinB3HTTPHeaderPropagator()
-	// injector := jaeger.TracerOptions.Injector(opentracing.HTTPHeaders, zipkinPropagator)
-	// extractor := jaeger.TracerOptions.Extractor(opentracing.HTTPHeaders, zipkinPropagator)
-	// // Zipkin shares span ID between client and server spans; it must be enabled via the following option.
-	// zipkinSharedRPCSpan := jaeger.TracerOptions.ZipkinSharedRPCSpan(true)
-
+	// collector, err := zipkin.NewHTTPCollector(*tracerHost)
 	// if err != nil {
-	// 	log.Fatalf("Cannot initialize a HTTP transport: %v", err)
+	// 	fmt.Printf("unable to create Zipkin HTTP collector: %+v\n", err)
+	// 	os.Exit(-1)
 	// }
 
-	// log.Println(transport)
+	// // create recorder.
+	// recorder := zipkin.NewRecorder(collector, false, "127.0.0.1:8080", *tracerKind)
 
-	// Create Jaeger tracer
-	// tracer, closer := jaeger.NewTracer(
-	// 	*tracerKind,
-	// 	jaeger.NewConstSampler(true),
-	// 	jaeger.NewRemoteReporter(transport, nil),
-	// 	// jaeger.NewNullReporter(),
-	// 	injector,
-	// 	extractor,
-	// 	zipkinSharedRPCSpan,
+	// create tracer.
+	// tracer, err := zipkin.NewTracer(
+	// 	recorder,
+	// 	zipkin.ClientServerSameSpan(true),
+	// 	zipkin.TraceID128Bit(true),
 	// )
-	// defer closer.Close()
 
+	trc, err := tracer.New(
+		tracer.Host(*tracerHost),
+		tracer.Name(*tracerKind),
+	)
+
+	if err != nil {
+		fmt.Printf("unable to create Zipkin tracer: %+v\n", err)
+		os.Exit(-1)
+	}
 	tracerOpts := []grpc_opentracing.Option{
-		grpc_opentracing.WithTracer(nil),
+		grpc_opentracing.WithTracer(trc),
 	}
 
 	// TODO: Setup database in `internals`` folder
