@@ -8,6 +8,13 @@ WORKDIR /go/src/github.com/alextanhongpin/go-grpc-event/server
 
 RUN go get -d -v
 
+# Update jaeger library
+WORKDIR /go/src/github.com/uber/jaeger-client-go
+
+RUN git submodule update --init --recursive && make install
+
+WORKDIR /go/src/github.com/alextanhongpin/go-grpc-event/server
+
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o app .
 
 
