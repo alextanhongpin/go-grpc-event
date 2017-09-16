@@ -17,8 +17,8 @@ import (
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 
-	"github.com/alextanhongpin/go-grpc-event/internals/database"
-	"github.com/alextanhongpin/go-grpc-event/internals/tracer"
+	"github.com/alextanhongpin/go-grpc-event/internal/database"
+	"github.com/alextanhongpin/go-grpc-event/internal/tracer"
 	pb "github.com/alextanhongpin/go-grpc-event/proto"
 )
 
@@ -194,22 +194,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-
-	// collector, err := zipkin.NewHTTPCollector(*tracerHost)
-	// if err != nil {
-	// 	fmt.Printf("unable to create Zipkin HTTP collector: %+v\n", err)
-	// 	os.Exit(-1)
-	// }
-
-	// // create recorder.
-	// recorder := zipkin.NewRecorder(collector, false, "127.0.0.1:8080", *tracerKind)
-
-	// create tracer.
-	// tracer, err := zipkin.NewTracer(
-	// 	recorder,
-	// 	zipkin.ClientServerSameSpan(true),
-	// 	zipkin.TraceID128Bit(true),
-	// )
 
 	trc, err := tracer.New(
 		tracer.Host(*tracerHost),
