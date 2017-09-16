@@ -1,23 +1,24 @@
 package main
 
 import (
-	"context"
 	"flag"
+	"fmt"
 	"log"
 	"net"
+	"os"
 	"time"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
 	"github.com/opentracing/opentracing-go"
-
+	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 
 	"github.com/alextanhongpin/go-grpc-event/internal/database"
-	hunter "github.com/alextanhongpin/go-grpc-event/internal/jaeger"
+	"github.com/alextanhongpin/go-grpc-event/internal/tracer"
 	pb "github.com/alextanhongpin/go-grpc-event/proto"
 )
 
@@ -181,10 +182,10 @@ func (s eventServer) DeleteEvent(ctx context.Context, msg *pb.DeleteEventRequest
 
 func main() {
 	var (
-		port    = flag.String("port", ":8080", "TCP port to listen on")
-		mgoHost = flag.String("mgo_host", "mongodb://localhost:27017", "MongoDB uri string")
-		// tracerHost = flag.String("tracer_host", "http://localhost:9411/api/v1/spans", "The jaeger host for opentracing")
-		// tracerKind = flag.String("tracer_kind", "grpc_event", "The namespace of the tracer we are running")
+		port       = flag.String("port", ":8080", "TCP port to listen on")
+		mgoHost    = flag.String("mgo_host", "mongodb://localhost:27017", "MongoDB uri string")
+		tracerHost = flag.String("tracer_host", "http://localhost:9411/api/v1/spans", "The jaeger host for opentracing")
+		tracerKind = flag.String("tracer_kind", "grpc_event", "The namespace of the tracer we are running")
 	)
 
 	flag.Parse()
@@ -194,16 +195,16 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	// trc, err := tracer.New(
-	// 	tracer.Host(*tracerHost),
-	// 	tracer.Name(*tracerKind),
-	// )
-	// if err != nil {
-	// 	fmt.Printf("unable to create Zipkin tracer: %+v\n", err)
-	// 	os.Exit(-1)
-	// }
-	trc, closer := hunter.New()
-	defer closer.Close()
+	trc, err := tracer.New(
+		tracer.Name(*tracerKind),
+		tracer.Host(*tracerHost),
+	)
+	if err != nil {
+		fmt.Printf("unable to create Zipkin tracer: %+v\n", err)
+		os.Exit(-1)
+	}
+	// trc, closer := hunter.New()
+	// defer closer.Close()
 
 	tracerOpts := []grpc_opentracing.Option{
 		grpc_opentracing.WithTracer(trc),
