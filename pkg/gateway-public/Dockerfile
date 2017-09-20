@@ -3,7 +3,7 @@ FROM golang:1.9 as builder
 MAINTAINER Alex Hong Pin Tan <alextan220990@gmail.com>
 
 LABEL version="0.0.1-beta"
-LABEL description="A grpc-server serving private events data"
+LABEL description="A grpc-gateway serving public events data"
 LABEL language="golang:1.9"
 LABEL keywords="go, grpc, grpc-server, event"
 
@@ -11,7 +11,7 @@ WORKDIR /go/src/github.com/alextanhongpin/go-grpc-event/
 
 COPY . .
 
-WORKDIR /go/src/github.com/alextanhongpin/go-grpc-event/pkg/server-private
+WORKDIR /go/src/github.com/alextanhongpin/go-grpc-event/pkg/gateway-public
 
 RUN go get -d -v
 
@@ -22,5 +22,5 @@ FROM alpine:latest
 RUN apk --no-cache add ca-certificates
 
 WORKDIR /root/
-COPY --from=builder /go/src/github.com/alextanhongpin/go-grpc-event/pkg/server-private/app .
+COPY --from=builder /go/src/github.com/alextanhongpin/go-grpc-event/pkg/gateway-public/app .
 CMD ["./app"]

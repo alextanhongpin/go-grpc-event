@@ -3,12 +3,10 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"log"
 	"net/http"
 
 	"github.com/golang/glog"
-	"github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/rs/cors"
 	"google.golang.org/grpc"
@@ -28,7 +26,7 @@ func run() error {
 	defer cancel()
 
 	opts := []grpc.DialOption{
-		grpc.WithInsecure()
+		grpc.WithInsecure(),
 	}
 
 	mux := runtime.NewServeMux()
@@ -58,4 +56,3 @@ func main() {
 type Response struct {
 	Message string
 }
-

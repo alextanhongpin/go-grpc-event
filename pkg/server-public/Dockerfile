@@ -11,7 +11,7 @@ WORKDIR /go/src/github.com/alextanhongpin/go-grpc-event/
 
 COPY . .
 
-WORKDIR /go/src/github.com/alextanhongpin/go-grpc-event/pkg/event-private
+WORKDIR /go/src/github.com/alextanhongpin/go-grpc-event/pkg/server-public
 
 RUN go get -d -v
 
@@ -22,5 +22,5 @@ FROM alpine:latest
 RUN apk --no-cache add ca-certificates
 
 WORKDIR /root/
-COPY --from=builder /go/src/github.com/alextanhongpin/go-grpc-event/pkg/event-private/app .
+COPY --from=builder /go/src/github.com/alextanhongpin/go-grpc-event/pkg/server-public/app .
 CMD ["./app"]
