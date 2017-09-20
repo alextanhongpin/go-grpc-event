@@ -18,6 +18,7 @@ func run() error {
 	var (
 		addr = flag.String("addr", "localhost:8090", "Address of the public event GRPC service")
 		port = flag.String("port", ":9090", "TCP address to listen on")
+		origin = flag.String("origin", "*", "The origin allowed")
 	)
 	flag.Parse()
 
@@ -36,9 +37,9 @@ func run() error {
 	log.Printf("listening to service=public_event at endpoint=%s\n", *addr)
 
 	handler := cors.New(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:9090/v1/events", "http://localhost:8080"},
+		AllowedOrigins:   []string{*origin},
 		AllowedHeaders:   []string{"Authorization", "Access-Control-Allow-Headers", "Origin", "Accept", "X-Requested-With", "Content-Type", "Access-Control-Request-Method", "Access-Control-Request-Headers"},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
 		AllowCredentials: true,
 	}).Handler(mux)
 

@@ -7,40 +7,46 @@ services:
     volumes:
       - ./data/db:/data/db
 
-  grpc-event-server:
-    image: alextanhongpin/go-grpc-event-server:latest
-    ports:
-      - 8081:8081
-    command: ./app -port :8081 -mgo_host mongodb://mongo:27017 -tracer_host http://openzipkin:9411/api/v1/spans
-
-  grpc-event-gateway:
-    image: alextanhongpin/go-grpc-event-gateway:latest
-    ports:
-      - 9090:9090
-    command: ./app -port :9090 -addr grpc-event-server:8081
-  
-  grpc-event-webui:
-    image: alextanhongpin/go-grpc-event-webui:latest
-    ports:
-      - 31000:8080
-  
   openzipkin:
     image: openzipkin/zipkin
     ports:
       - 9411:9411
-  
-  jaeger:
-    image: jaegertracing/all-in-one:latest
-    ports:
-      - 5775:5775/udp # Accept zipkin.thrift over compact thrift protocol
-      - 6831:6831/udp # Accept jaeger.thrift ofer compact thrift protocol
-      - 6832:6832/udp # Accept jaeger.thrift over binary thrift protocol
-      - 5778:5778 # Serve configs
-      - 16686:16686 # Serve frontend
-      - 14268:14268 # Accept zipkin.thrift from zipkin senders
 
-  event:
+  # jaeger:
+  #   image: jaegertracing/all-in-one:latest
+  #   ports:
+  #     - 5775:5775/udp # Accept zipkin.thrift over compact thrift protocol
+  #     - 6831:6831/udp # Accept jaeger.thrift ofer compact thrift protocol
+  #     - 6832:6832/udp # Accept jaeger.thrift over binary thrift protocol
+  #     - 5778:5778 # Serve configs
+  #     - 16686:16686 # Serve frontend
+  #     - 14268:14268 # Accept zipkin.thrift from zipkin senders
+
+  private-server:
+    image: alextanhongpin/private-event-server:0.0.1-beta
+    ports:
+      - 8080
+    command: ./app -port :8080 -mgo_host=mongodb://mongo:27017
+
+  public-server:
     image: alextanhongpin/public-event-server:0.0.1-beta
     ports:
-      - 8081:8081
-    command: ./app -port :8081 -mgo_host=mongodb://mongo:27017
+      - 8080
+    command: ./app -port :8080 -mgo_host mongodb://mongo:27017 -tracer_host http://openzipkin:9411/api/v1/spans -tracer_kind grpc_event
+
+  private-gateway:
+    image: alextanhongpin/private-event-gateway:0.0.1-beta
+    ports:
+      - 8080
+    command: ./app -port :8080 -addr private-server:8080 -jwks_uri https://engineersmy.auth0.com/.well-known/jwks.json -auth0_iss https://engineersmy.auth0.com/ -auth0_aud http://localhost:9090
+
+  public-gateway:
+    image: alextanhongpin/public-event-gateway:0.0.1-beta
+    ports:
+      - 8080
+    command: ./app -port :8080 -addr public-server:8080
+
+  webui:
+    image: alextanhongpin/go-grpc-event-webui:latest
+    ports:
+      - 8080

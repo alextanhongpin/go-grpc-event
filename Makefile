@@ -4,6 +4,12 @@ PRIVATE_GATEWAY_PORT=:9091
 PUBLIC_SERVER_PORT=:8090
 PUBLIC_GATEWAY_PORT=:9090
 
+up:
+	docker-compose -f docker-compose/production/docker-compose.yml up -d
+
+down:
+	docker-compose -f docker-compose/production/docker-compose.yml down
+
 build-server:
 	docker build -f server/Dockerfile -t alextanhongpin/go-grpc-event-server .
 
@@ -50,11 +56,11 @@ tag:
 
 # serve-grpc serves the grpc server at the specified port
 serve-private:
-	go run pkg/event-private/main.go -port ${PRIVATE_SERVER_PORT}
+	go run pkg/server-private/main.go -port ${PRIVATE_SERVER_PORT}
 
 
 serve-public:
-	go run pkg/event-public/main.go -port ${PUBLIC_SERVER_PORT}
+	go run pkg/server-public/main.go -port ${PUBLIC_SERVER_PORT}
 
 
 # serve-gateway serves the grpc gateway at the specified port while listening to the server endpoint

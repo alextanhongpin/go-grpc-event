@@ -15,3 +15,8 @@ private-gateway:
 	docker push alextanhongpin/private-event-gateway:0.0.1-beta
 
 
+push-all:
+	docker push alextanhongpin/public-event-server:0.0.1-beta &
+	docker push alextanhongpin/private-event-server:0.0.1-beta &
+	docker push alextanhongpin/public-event-gateway:0.0.1-beta &
+	docker push alextanhongpin/private-event-gateway:0.0.1-beta
