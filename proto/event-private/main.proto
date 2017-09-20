@@ -1,5 +1,5 @@
 syntax = "proto3";
-package event;
+package eventprivate;
 
 import "google/api/annotations.proto";
 
@@ -15,18 +15,21 @@ service EventService {
       get: "/v1/events/{id}"
     };
   }
+
   rpc CreateEvent (CreateEventRequest) returns (CreateEventResponse) {
     option (google.api.http) = {
       post: "/v1/events",
       body: "*"
     };
   }
+
   rpc UpdateEvent (UpdateEventRequest) returns (UpdateEventResponse) {
     option (google.api.http) = {
       patch: "/v1/events/{data.id}",
       body: "*"
     };
   }
+
   rpc DeleteEvent (DeleteEventRequest) returns (DeleteEventResponse) {
     option (google.api.http) = {
       delete: "/v1/events/{id}"
@@ -48,6 +51,8 @@ message Event {
   string uri = 6;
   // @inject_tag: bson:"tags"
   repeated string tags = 7;
+  // @inject_tag: bson:"is_published"
+  bool is_published = 8;
 }
 
 message GetEventsRequest {
