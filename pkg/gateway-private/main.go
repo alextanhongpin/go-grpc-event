@@ -8,17 +8,22 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/auth0-community/go-auth0"
+	auth0 "github.com/auth0-community/go-auth0"
 	"github.com/golang/glog"
 	"github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
-	// "github.com/rs/cors"
 	"google.golang.org/grpc"
-	"gopkg.in/square/go-jose.v2"
+	jose "gopkg.in/square/go-jose.v2"
 	"gopkg.in/square/go-jose.v2/jwt"
 
 	"github.com/alextanhongpin/go-grpc-event/internal/cors"
 	gw "github.com/alextanhongpin/go-grpc-event/proto/event-private"
+)
+
+var (
+	gauth0APIAudience string
+	gjwksURI          string
+	gauth0APIIssuer   string
 )
 
 func run() error {
@@ -44,6 +49,10 @@ func run() error {
 	if err := gw.RegisterEventServiceHandlerFromEndpoint(ctx, mux, *addr, opts); err != nil {
 		return err
 	}
+	gjwksURI = *jwksURI
+	gauth0APIIssuer = *auth0APIIssuer
+	gauth0APIAudience = *auth0APIAudience
+
 	log.Printf("listening to service=private_event at endpoint=%s\n", *addr)
 	log.Printf("listening to port *%s\n", *port)
 	return http.ListenAndServe(*port, cors.New(checkJwt(mux)))
@@ -75,10 +84,10 @@ func checkJwt(h http.Handler) http.Handler {
 			h.ServeHTTP(w, r)
 			return
 		}
-		client := auth0.NewJWKClient(auth0.JWKClientOptions{URI: *jwksURI})
-		audience := []string{*auth0APIAudience}
+		client := auth0.NewJWKClient(auth0.JWKClientOptions{URI: gjwksURI})
+		audience := []string{gauth0APIAudience}
 
-		configuration := auth0.NewConfiguration(client, audience, *auth0APIIssuer, jose.RS256)
+		configuration := auth0.NewConfiguration(client, audience, gauth0APIIssuer, jose.RS256)
 		validator := auth0.NewValidator(configuration)
 
 		token, err := validator.ValidateRequest(r)
