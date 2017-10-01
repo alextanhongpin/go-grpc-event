@@ -55,7 +55,7 @@ func run() error {
 
 	log.Printf("listening to service=private_event at endpoint=%s\n", *addr)
 	log.Printf("listening to port *%s\n", *port)
-	return http.ListenAndServe(*port, cors.New(checkJwt(mux)))
+	return http.ListenAndServe(*port, cors.New(checkJWT(mux)))
 }
 
 func main() {
@@ -78,7 +78,7 @@ func GetUnaryClientInterceptor() grpc.UnaryClientInterceptor {
 	}
 }
 
-func checkJwt(h http.Handler) http.Handler {
+func checkJWT(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/public/v1/events" {
 			h.ServeHTTP(w, r)
@@ -113,13 +113,14 @@ func checkJwt(h http.Handler) http.Handler {
 				}
 				w.WriteHeader(http.StatusUnauthorized)
 				json.NewEncoder(w).Encode(response)
-
 			}
 		}
 	})
 }
 
 func checkScope(r *http.Request, validator *auth0.JWTValidator, token *jwt.JSONWebToken) bool {
+
+	log.Printf("Checking token scope: %#v", token)
 	claims := map[string]interface{}{}
 	err := validator.Claims(r, token, &claims)
 

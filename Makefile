@@ -104,3 +104,7 @@ push-server:
 
 push-gateway:
 	docker push alextanhongpin/go-grpc-event-gateway
+
+
+compile:
+	GOOS=linux GOARCH=arm CGO_ENABLED=0 go build -o app main.go

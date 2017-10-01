@@ -13,6 +13,7 @@ import (
 	"github.com/opentracing/opentracing-go"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 
@@ -34,6 +35,12 @@ type Event struct {
 }
 
 func (s eventServer) GetEvents(ctx context.Context, msg *pb.GetEventsRequest) (*pb.GetEventsResponse, error) {
+
+	// Receive metadata server-side
+	md, ok := metadata.FromIncomingContext(ctx)
+	if ok {
+		log.Printf("got metadata: %#v", md)
+	}
 	sess := s.db.Copy()
 	defer sess.Close()
 

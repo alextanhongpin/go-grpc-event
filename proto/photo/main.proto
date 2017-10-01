@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package photo;
+
+import "google/api/annotations.proto";
+
+service PhotoService {
+  rpc GetPhotos (GetPhotosRequest) returns (GetPhotosResponse) {
+    option (google.api.http) = {
+      get: "/v1/photos"
+    };
+  }
+  rpc GetPhoto (GetPhotoRequest) returns (GetPhotoResponse) {
+    option (google.api.http) = {
+      get: "/v1/photos/{id}"
+    };
+  }
+}
+
+message Photo {
+  string id = 1;
+  int64 created_at = 2;
+  int64 updated_at = 3;
+  string name = 4;
+  string src = 5;
+  string caption = 6;
+  bool is_published = 7;
+  string user_id = 8;
+  bool is_anonymous = 9;
+  User user = 10;
+}
+
+message User {
+  string name = 1;
+}
+// {
+//     "sub": "github|6033638",
+//     "email": "alextan@seekasia.com",
+//     "nickname": "alextanhongpin",
+//     "name": "Alex Tan Hong Pin",
+//     "picture": "https://avatars3.githubusercontent.com/u/6033638?v=4",
+//     "updated_at": "2017-10-01T13:13:06.516Z"
+// }
