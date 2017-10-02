@@ -8,12 +8,15 @@ import (
 	"os"
 	"time"
 
+	"github.com/grpc-ecosystem/go-grpc-middleware/auth"
+
 	"github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
 	"github.com/opentracing/opentracing-go"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 
@@ -231,9 +234,12 @@ func main() {
 	grpcServer := grpc.NewServer(
 		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
 			grpc_opentracing.StreamServerInterceptor(tracerOpts...),
+			grpc_auth.StreamServerInterceptor(AuthFunc),
 		)),
 		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
 			grpc_opentracing.UnaryServerInterceptor(tracerOpts...),
+			grpc_middleware.ChainUnaryServer(UnaryAuthInterceptor()),
+			grpc_auth.UnaryServerInterceptor(AuthFunc),
 		)),
 	)
 	pb.RegisterEventServiceServer(grpcServer, &eventServer{
@@ -242,4 +248,42 @@ func main() {
 
 	log.Printf("listening to port *%s. press ctrl + c to cancel.\n", *port)
 	grpcServer.Serve(lis)
+}
+
+func UnaryAuthInterceptor() grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+
+		log.Println("in UnaryServerInterceptor")
+		log.Println(ctx)
+		// Note that this metadata also receives the `Grpc-Metadata-<field>` set from the headers in
+		// a curl request
+		md, _ := metadata.FromOutgoingContext(ctx)
+		if ok {
+			// Override context if the user is in the whitelist
+			roles := md["role"]
+			if len(roles) > 0 {
+				// Set metadata to send to grpc-server
+				md = metadata.Pairs(
+					"role", "admin",
+					"can-edit", "true",
+				)
+				ctx = metadata.NewOutgoingContext(ctx, md)
+			}
+		}
+
+		err := invoker(ctx, method, req, reply, cc, opts...)
+		return err
+	}
+}
+
+func AuthFunc(ctx context.Context) (context.Context, error) {
+	token, err := grpc_auth.AuthFromMD(ctx, "bearer")
+	if err != nil {
+		return nil, err
+	}
+	// Parse token
+	// tokenInfo, err := parseToken(token)
+	grpc_ctxtags.Extract(ctx).Set("auth.sub", "something")
+	newCtx := context.WithValue(ctx, "tokenInfo", "new token")
+	return newCtx, nil
 }
