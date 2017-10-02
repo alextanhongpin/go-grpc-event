@@ -143,6 +143,20 @@ func fetchUserDetails(r *http.Request) error {
 	if err = json.NewDecoder(resp.Body).Decode(&userinfo); err != nil {
 		return err
 	}
+
+	// TODO: Verify that the headers cannot be injected from outside
+	// r.Header.Set("Grpc-Metadata-Email", "")
+	// 	EmailVerified bool   `json:"email_verified"` // false
+	// 	Email         string `json:"email"`          // "test.account@userinfo.com"
+	// 	ClientID      string `json:"clientID"`       // "q2hnj2iu..."
+	// 	UpdatedAt     string `json:"updated_at"`     // "2016-12-05T15:15:40.545Z"
+	// 	Name          string `json:"name"`           //  "test.account@userinfo.com"
+	// 	Picture       string `json:"picture"`        // "https://s.gravatar.com/avatar/dummy.png"
+	// 	UserID        string `json:"user_id"`        // "auth0|58454..."
+	// 	Nickname      string `json:"nickname"`       // "test.account"
+	// 	CreatedAt     string `json:"created_at"`     // "2016-12-05T11:16:59.640Z"
+	// 	Sub           string `json:"sub"`            // "auth0|58454..."
+
 	// For each of the users metadata present, write it to the grpc-metadata
 	for k, v := range userinfo {
 		var buff bytes.Buffer

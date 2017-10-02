@@ -10,7 +10,7 @@ import (
 
 // Options is a struct that represents the available options for the auth0
 type Options struct {
-	audience string
+	audience []string
 	jwksURI  string
 	issuer   string
 }
@@ -19,7 +19,7 @@ type Options struct {
 type Option func(*Options)
 
 // Audience represents list of urls that is allowed by the openid
-func Audience(audience string) Option {
+func Audience(audience ...string) Option {
 	return func(o *Options) {
 		o.audience = audience
 	}
@@ -42,7 +42,7 @@ func Issuer(iss string) Option {
 // New returns a new Auth0 struct
 func New(opts ...Option) *Auth0 {
 	options := Options{
-		audience: "",
+		audience: []string{},
 		jwksURI:  "",
 		issuer:   "",
 	}
@@ -50,7 +50,7 @@ func New(opts ...Option) *Auth0 {
 		o(&options)
 	}
 	client := auth0.NewJWKClient(auth0.JWKClientOptions{URI: options.jwksURI})
-	audience := []string{options.audience}
+	audience := options.audience
 	configuration := auth0.NewConfiguration(client, audience, options.issuer, jose.RS256)
 	validator := auth0.NewValidator(configuration)
 	return &Auth0{

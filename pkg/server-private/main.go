@@ -36,7 +36,7 @@ type UserInfo struct {
 	UserID   string `json:"user_id"`  // "auth0|58454..."
 	Nickname string `json:"nickname"` // "test.account"
 	Sub      string `json:"sub"`      // "auth0|58454..."
-	IsAdmin  bool   `json:"-"`        // false
+	Admin    bool   `json:"-"`        // false
 }
 
 // IsAuthorized checks if the user is authorized
@@ -46,7 +46,7 @@ func (u UserInfo) IsAuthorized() bool {
 
 // IsAdmin checks if the user is admin
 func (u UserInfo) IsAdmin() bool {
-	return u.IsAdmin
+	return u.Admin
 }
 
 // Event shadows the ID field to map the bson.ObjectId that is not available
@@ -68,7 +68,7 @@ func (s eventServer) GetEvents(ctx context.Context, msg *pb.GetEventsRequest) (*
 	var tmpEvents []Event
 
 	if err := c.Find(bson.M{
-		"is_published": msg.IsPublished,
+	// "is_published": msg.IsPublished,
 	}).All(&tmpEvents); err != nil {
 		span.SetTag("error", err.Error())
 		return nil, err
@@ -127,13 +127,13 @@ func (s eventServer) CreateEvent(ctx context.Context, msg *pb.CreateEventRequest
 	defer sess.Close()
 
 	// Create a new id, because we want to return it after creating
-	id := bson.NewObjectId()
+	// id := bson.NewObjectId()
 	c := s.db.Collection(sess, "events")
 
-	msg.Data.Id = id
+	// msg.Data.ID = id
 	msg.Data.CreatedAt = time.Now().UnixNano() / 1000000
 	msg.Data.UpdatedAt = time.Now().UnixNano() / 1000000
-	msg.Data.IsPublished = true
+	msg.Data.IsPublished = usr.IsAdmin() // Events created by admin defaults to true
 
 	// Set user
 	// msg.Data.User = usr
@@ -349,8 +349,8 @@ func getUserInfoFromCtx(ctx context.Context) *UserInfo {
 		user.Sub = subs[0]
 	}
 
-	_, ok := md["admin"]
-	user.IsAdmin = ok && len(subs) > 0
+	_, ok = md["admin"]
+	user.Admin = ok && len(subs) > 0
 
 	return &user
 }
