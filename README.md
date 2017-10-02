@@ -91,7 +91,7 @@ func GetUnaryClientInterceptor() grpc.UnaryClientInterceptor {
 }
 ```
 
-## Passing metadata from middleware to client interceptor
+## Passing metadata from middleware to client interceptor at Grpc Gateway
 
 When running the code, it will go through the middleware first before going through the client interceptor. Since the client interceptor cannot access the request context (authorization, jwt token), you want to get the context from the middleware first, and then pass it to the client interceptor.
 
@@ -178,8 +178,84 @@ func GetUnaryClientInterceptor() grpc.UnaryClientInterceptor {
 }
 ```
 
+## Handling auth at Grpc Server
 
-To enable opentracing for the jaeger library:
+You can implement grpc server interceptor and also auth
+```go
+
+import "github.com/grpc-ecosystem/go-grpc-middleware/auth"
+func main () {
+	grpcServer := grpc.NewServer(
+		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
+			grpc_opentracing.StreamServerInterceptor(tracerOpts...),
+			grpc_auth.StreamServerInterceptor(AuthFunc),
+		)),
+		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
+			grpc_opentracing.UnaryServerInterceptor(tracerOpts...),
+			SomeInterceptor(),
+			grpc_auth.UnaryServerInterceptor(AuthFunc),
+		)),
+	)
+}
+
+// Example of interceptor on the server side with grpc
+func SomeInterceptor() grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		log.Println("unary auth interceptor", req, info)
+		// log.Println("in UnaryServerInterceptor")
+		// log.Println(ctx)
+		// // Note that this metadata also receives the `Grpc-Metadata-<field>` set from the headers in
+		// // a curl request
+		md, ok := metadata.FromIncomingContext(ctx)
+		if ok {
+			log.Println("Got metadata", md)
+		}
+
+		return handler(ctx, req)
+	}
+}
+
+// Example of auth. This however requires the bearer token to be present - in our use case where
+// we have both public and private users, this can be limiting
+func AuthFunc(ctx context.Context) (context.Context, error) {
+	token, err := grpc_auth.AuthFromMD(ctx, "bearer")
+	if err != nil {
+		return nil, err
+	}
+	log.Println("token", token)
+	// Parse token
+	// tokenInfo, err := parseToken(token)
+	grpc_ctxtags.Extract(ctx).Set("auth.sub", "something")
+	newCtx := context.WithValue(ctx, "tokenInfo", "new token")
+	return newCtx, nil
+}
+
+```
+
+
+## Interceptor for api gateway
+
+```go
+func run () error {
+	opts := []grpc.DialOption{
+		grpc.WithInsecure(),
+		grpc.WithUnaryInterceptor(grpc_middleware.ChainUnaryClient(GetUnaryClientInterceptor())),
+	}
+}
+
+// Your unary interceptor
+func GetUnaryClientInterceptor() grpc.UnaryClientInterceptor {
+	return func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+		methodName := fmt.Sprintf("client:%s", method)
+		log.Println(methodName)
+		err := invoker(ctx, method, req, reply, cc, opts...)
+		return err
+	}
+}
+
+```
+
+## To enable opentracing for the jaeger library:
 
 ```
 $ go get -u github.com/uber/jaeger-client-go/

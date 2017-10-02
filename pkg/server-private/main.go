@@ -8,8 +8,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/grpc-ecosystem/go-grpc-middleware/auth"
-
 	"github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
 	"github.com/opentracing/opentracing-go"
@@ -30,6 +28,27 @@ type eventServer struct {
 	tracer opentracing.Tracer
 }
 
+// UserInfo represents the schema from the auth0 userinfo endpoint
+type UserInfo struct {
+	Email    string `json:"email"`    // "test.account@userinfo.com"
+	Name     string `json:"name"`     //  "test.account@userinfo.com"
+	Picture  string `json:"picture"`  // "https://s.gravatar.com/avatar/dummy.png"
+	UserID   string `json:"user_id"`  // "auth0|58454..."
+	Nickname string `json:"nickname"` // "test.account"
+	Sub      string `json:"sub"`      // "auth0|58454..."
+	IsAdmin  bool   `json:"-"`        // false
+}
+
+// IsAuthorized checks if the user is authorized
+func (u UserInfo) IsAuthorized() bool {
+	return u.UserID != ""
+}
+
+// IsAdmin checks if the user is admin
+func (u UserInfo) IsAdmin() bool {
+	return u.IsAdmin
+}
+
 // Event shadows the ID field to map the bson.ObjectId that is not available
 // in .proto
 type Event struct {
@@ -47,7 +66,10 @@ func (s eventServer) GetEvents(ctx context.Context, msg *pb.GetEventsRequest) (*
 	c := s.db.Collection(sess, "events")
 
 	var tmpEvents []Event
-	if err := c.Find(bson.M{}).All(&tmpEvents); err != nil {
+
+	if err := c.Find(bson.M{
+		"is_published": msg.IsPublished,
+	}).All(&tmpEvents); err != nil {
 		span.SetTag("error", err.Error())
 		return nil, err
 	}
@@ -91,17 +113,30 @@ func (s eventServer) GetEvent(ctx context.Context, msg *pb.GetEventRequest) (*pb
 }
 
 func (s eventServer) CreateEvent(ctx context.Context, msg *pb.CreateEventRequest) (*pb.CreateEventResponse, error) {
+
 	span, ctx := opentracing.StartSpanFromContext(ctx, "CreateEvent")
 	defer span.Finish()
+
+	usr := getUserInfoFromCtx(ctx)
+	if !usr.IsAdmin() {
+		span.SetTag("error", "User is not authorized to perform this action")
+		return nil, grpc.Errorf(codes.Unauthenticated, "User is not authorized to perform this action")
+	}
 
 	sess := s.db.Copy()
 	defer sess.Close()
 
+	// Create a new id, because we want to return it after creating
+	id := bson.NewObjectId()
 	c := s.db.Collection(sess, "events")
 
+	msg.Data.Id = id
 	msg.Data.CreatedAt = time.Now().UnixNano() / 1000000
 	msg.Data.UpdatedAt = time.Now().UnixNano() / 1000000
 	msg.Data.IsPublished = true
+
+	// Set user
+	// msg.Data.User = usr
 
 	if err := c.Insert(msg.Data); err != nil {
 		span.SetTag("error", err.Error())
@@ -110,12 +145,19 @@ func (s eventServer) CreateEvent(ctx context.Context, msg *pb.CreateEventRequest
 
 	return &pb.CreateEventResponse{
 		Ok: true,
+		// Id: id,
 	}, nil
 }
 
 func (s eventServer) UpdateEvent(ctx context.Context, msg *pb.UpdateEventRequest) (*pb.UpdateEventResponse, error) {
 	span, ctx := opentracing.StartSpanFromContext(ctx, "UpdateEvent")
 	defer span.Finish()
+
+	usr := getUserInfoFromCtx(ctx)
+	if !usr.IsAdmin() {
+		span.SetTag("error", "User is not authorized to perform this action")
+		return nil, grpc.Errorf(codes.Unauthenticated, "User is not authorized to perform this action")
+	}
 
 	if !bson.IsObjectIdHex(msg.Data.Id) {
 		span.SetTag("error", "Event does not exist or has been deleted")
@@ -167,6 +209,12 @@ func (s eventServer) UpdateEvent(ctx context.Context, msg *pb.UpdateEventRequest
 func (s eventServer) DeleteEvent(ctx context.Context, msg *pb.DeleteEventRequest) (*pb.DeleteEventResponse, error) {
 	span, ctx := opentracing.StartSpanFromContext(ctx, "DeleteEvent")
 	defer span.Finish()
+
+	usr := getUserInfoFromCtx(ctx)
+	if !usr.IsAdmin() {
+		span.SetTag("error", "User is not authorized to perform this action")
+		return nil, grpc.Errorf(codes.Unauthenticated, "User is not authorized to perform this action")
+	}
 
 	if !bson.IsObjectIdHex(msg.Id) {
 		span.SetTag("error", "Event does not exist or has been deleted")
@@ -234,14 +282,13 @@ func main() {
 	grpcServer := grpc.NewServer(
 		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
 			grpc_opentracing.StreamServerInterceptor(tracerOpts...),
-			grpc_auth.StreamServerInterceptor(AuthFunc),
 		)),
 		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
 			grpc_opentracing.UnaryServerInterceptor(tracerOpts...),
-			grpc_middleware.ChainUnaryServer(UnaryAuthInterceptor()),
-			grpc_auth.UnaryServerInterceptor(AuthFunc),
+			// SomeInterceptor(),
 		)),
 	)
+
 	pb.RegisterEventServiceServer(grpcServer, &eventServer{
 		db: db,
 	})
@@ -250,40 +297,60 @@ func main() {
 	grpcServer.Serve(lis)
 }
 
-func UnaryAuthInterceptor() grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+// func SomeInterceptor() grpc.UnaryServerInterceptor {
+// 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+// 		log.Println("unary auth interceptor", req, info)
+// 		// log.Println("in UnaryServerInterceptor")
+// 		// log.Println(ctx)
+// 		// // Note that this metadata also receives the `Grpc-Metadata-<field>` set from the headers in
+// 		// // a curl request
+// 		md, ok := metadata.FromIncomingContext(ctx)
+// 		if ok {
+// 			log.Println("Got metadata", md)
+// 		}
 
-		log.Println("in UnaryServerInterceptor")
-		log.Println(ctx)
-		// Note that this metadata also receives the `Grpc-Metadata-<field>` set from the headers in
-		// a curl request
-		md, _ := metadata.FromOutgoingContext(ctx)
-		if ok {
-			// Override context if the user is in the whitelist
-			roles := md["role"]
-			if len(roles) > 0 {
-				// Set metadata to send to grpc-server
-				md = metadata.Pairs(
-					"role", "admin",
-					"can-edit", "true",
-				)
-				ctx = metadata.NewOutgoingContext(ctx, md)
-			}
-		}
+// 		return handler(ctx, req)
+// 	}
+// }
 
-		err := invoker(ctx, method, req, reply, cc, opts...)
-		return err
+func getUserInfoFromCtx(ctx context.Context) *UserInfo {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil
 	}
-}
+	var user UserInfo
 
-func AuthFunc(ctx context.Context) (context.Context, error) {
-	token, err := grpc_auth.AuthFromMD(ctx, "bearer")
-	if err != nil {
-		return nil, err
+	emails, ok := md["email"]
+	if ok && len(emails) > 0 {
+		user.Email = emails[0]
 	}
-	// Parse token
-	// tokenInfo, err := parseToken(token)
-	grpc_ctxtags.Extract(ctx).Set("auth.sub", "something")
-	newCtx := context.WithValue(ctx, "tokenInfo", "new token")
-	return newCtx, nil
+
+	names, ok := md["name"]
+	if ok && len(names) > 0 {
+		user.Name = names[0]
+	}
+
+	pictures, ok := md["picture"]
+	if ok && len(pictures) > 0 {
+		user.Picture = pictures[0]
+	}
+
+	userIDs, ok := md["userid"]
+	if ok && len(userIDs) > 0 {
+		user.UserID = userIDs[0]
+	}
+
+	nicknames, ok := md["nickname"]
+	if ok && len(nicknames) > 0 {
+		user.Nickname = nicknames[0]
+	}
+	subs, ok := md["sub"]
+	if ok && len(subs) > 0 {
+		user.Sub = subs[0]
+	}
+
+	_, ok := md["admin"]
+	user.IsAdmin = ok && len(subs) > 0
+
+	return &user
 }

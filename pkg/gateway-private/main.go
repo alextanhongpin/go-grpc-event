@@ -1,40 +1,63 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
-	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
-	auth0 "github.com/auth0-community/go-auth0"
+	// auth0 "github.com/auth0-community/go-auth0"
 	"github.com/golang/glog"
-	"github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"google.golang.org/grpc"
-	jose "gopkg.in/square/go-jose.v2"
-	"gopkg.in/square/go-jose.v2/jwt"
 
+	"github.com/alextanhongpin/go-grpc-event/internal/auth0"
 	"github.com/alextanhongpin/go-grpc-event/internal/cors"
 	gw "github.com/alextanhongpin/go-grpc-event/proto/event-private"
 )
 
-var (
-	gauth0APIAudience string
-	gjwksURI          string
-	gauth0APIIssuer   string
-)
+// UserInfo represents the schema from the auth0 userinfo endpoint
+// type UserInfo struct {
+// 	EmailVerified bool   `json:"email_verified"` // false
+// 	Email         string `json:"email"`          // "test.account@userinfo.com"
+// 	ClientID      string `json:"clientID"`       // "q2hnj2iu..."
+// 	UpdatedAt     string `json:"updated_at"`     // "2016-12-05T15:15:40.545Z"
+// 	Name          string `json:"name"`           //  "test.account@userinfo.com"
+// 	Picture       string `json:"picture"`        // "https://s.gravatar.com/avatar/dummy.png"
+// 	UserID        string `json:"user_id"`        // "auth0|58454..."
+// 	Nickname      string `json:"nickname"`       // "test.account"
+// 	CreatedAt     string `json:"created_at"`     // "2016-12-05T11:16:59.640Z"
+// 	Sub           string `json:"sub"`            // "auth0|58454..."
+// }
+
+// Response represents the payload that is returned on error
+type Response struct {
+	Message string `json:"message"`
+}
+
+var auth0Validator *auth0.Auth0
+var whitelist []string
 
 func run() error {
 	var (
-		addr             = flag.String("addr", "localhost:8081", "Address of the private event GRPC service")
-		port             = flag.String("port", ":9081", "TCP address to listen on")
-		jwksURI          = flag.String("jwks_uri", "", "Auth0 jwks uri available at auth0 dashboard")
-		auth0APIIssuer   = flag.String("auth0_iss", "", "Auth0 api issuer available at auth0 dashboard")
-		auth0APIAudience = flag.String("auth0_aud", "", "Auth0 api audience available at auth0 dashboard")
+		addr              = flag.String("addr", "localhost:8081", "Address of the private event GRPC service")
+		port              = flag.String("port", ":9081", "TCP address to listen on")
+		jwksURI           = flag.String("jwks_uri", "", "Auth0 jwks uri available at auth0 dashboard")
+		auth0APIIssuer    = flag.String("auth0_iss", "", "Auth0 api issuer available at auth0 dashboard")
+		auth0APIAudience  = flag.String("auth0_aud", "", "Auth0 api audience available at auth0 dashboard")
+		whitelistedEmails = flag.String("whitelisted_emails", "", "A list of admin emails that are whitelisted")
 	)
 	flag.Parse()
+
+	if *whitelistedEmails != "" {
+		tmp := strings.Split(*whitelistedEmails, ",")
+		for _, v := range tmp {
+			whitelist = append(whitelist, strings.TrimSpace(v))
+		}
+	}
 
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
@@ -42,19 +65,22 @@ func run() error {
 
 	opts := []grpc.DialOption{
 		grpc.WithInsecure(),
-		grpc.WithUnaryInterceptor(grpc_middleware.ChainUnaryClient(GetUnaryClientInterceptor())),
 	}
 
 	mux := runtime.NewServeMux()
 	if err := gw.RegisterEventServiceHandlerFromEndpoint(ctx, mux, *addr, opts); err != nil {
 		return err
 	}
-	gjwksURI = *jwksURI
-	gauth0APIIssuer = *auth0APIIssuer
-	gauth0APIAudience = *auth0APIAudience
 
-	log.Printf("listening to service=private_event at endpoint=%s\n", *addr)
-	log.Printf("listening to port *%s\n", *port)
+	// Create a global validator that is only initialized once
+	auth0Validator = auth0.New(
+		auth0.Audience(*auth0APIAudience),
+		auth0.JWKSURI(*jwksURI),
+		auth0.Issuer(*auth0APIIssuer),
+	)
+
+	log.Printf("grpc_server = %s\n", *addr)
+	log.Printf("listening to port *%s. press ctrl + c to cancel.\n", *port)
 	return http.ListenAndServe(*port, cors.New(checkJWT(mux)))
 }
 
@@ -65,71 +91,75 @@ func main() {
 	}
 }
 
-type Response struct {
-	Message string
-}
-
-func GetUnaryClientInterceptor() grpc.UnaryClientInterceptor {
-	return func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-		methodName := fmt.Sprintf("client:%s", method)
-		log.Println(methodName)
-		err := invoker(ctx, method, req, reply, cc, opts...)
-		return err
-	}
-}
-
 func checkJWT(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/public/v1/events" {
+
+		// Is public user
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
 			h.ServeHTTP(w, r)
 			return
 		}
-		client := auth0.NewJWKClient(auth0.JWKClientOptions{URI: gjwksURI})
-		audience := []string{gauth0APIAudience}
 
-		configuration := auth0.NewConfiguration(client, audience, gauth0APIIssuer, jose.RS256)
-		validator := auth0.NewValidator(configuration)
-
-		token, err := validator.ValidateRequest(r)
+		_, err := auth0Validator.Validate(r)
+		// log.Println("got token", token)
 
 		if err != nil {
-			fmt.Println("Token is not valid or missing token", err)
-
-			response := Response{
-				Message: "Missing or invalid token.",
-			}
-
+			log.Printf("Error validating token: %#v\n", err)
 			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(response)
-
-		} else {
-			// Ensure the token has the correct scope
-			result := checkScope(r, validator, token)
-			if result == true {
-				h.ServeHTTP(w, r)
-			} else {
-				response := Response{
-					Message: "You do not have the read:events scope.",
-				}
-				w.WriteHeader(http.StatusUnauthorized)
-				json.NewEncoder(w).Encode(response)
-			}
+			json.NewEncoder(w).Encode(Response{
+				Message: "Missing or invalid token.",
+			})
+			return
 		}
+
+		// Fetch the user details and pass it through the grpc-metadata
+		if err = fetchUserDetails(r); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(Response{
+				Message: "Unable to get users data.",
+			})
+			return
+		}
+		h.ServeHTTP(w, r)
 	})
 }
 
-func checkScope(r *http.Request, validator *auth0.JWTValidator, token *jwt.JSONWebToken) bool {
-
-	log.Printf("Checking token scope: %#v", token)
-	claims := map[string]interface{}{}
-	err := validator.Claims(r, token, &claims)
-
+func fetchUserDetails(r *http.Request) error {
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", "https://engineersmy.auth0.com/userinfo", nil)
 	if err != nil {
-		fmt.Println(err)
-		return false
+		return err
 	}
-	// if strings.Contains(claims["scope"].(string), "read:events") {
-	// 	return true
-	// }
-	return true
+	req.Header.Add("Authorization", r.Header.Get("Authorization"))
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	userinfo := make(map[string]string) // UserInfo
+
+	if err = json.NewDecoder(resp.Body).Decode(&userinfo); err != nil {
+		return err
+	}
+	// For each of the users metadata present, write it to the grpc-metadata
+	for k, v := range userinfo {
+		var buff bytes.Buffer
+		buff.WriteString("Grpc-Metadata-")
+		buff.WriteString(k)
+		r.Header.Set(buff.String(), v)
+	}
+	if email, ok := userinfo["email"]; ok {
+		if len(whitelist) > 0 {
+			for _, v := range whitelist {
+				if v == email {
+					r.Header.Set("Grpc-Metadata-Admin", "true")
+				}
+			}
+		}
+	}
+
+	// Do a checking to see the user emails which are whitelisted
+	return nil
 }

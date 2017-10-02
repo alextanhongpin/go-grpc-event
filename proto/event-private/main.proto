@@ -53,10 +53,12 @@ message Event {
   repeated string tags = 7;
   // @inject_tag: bson:"is_published"
   bool is_published = 8;
+  User user = 10;
 }
 
 message GetEventsRequest {
   string query = 1;
+  bool is_published = 2;
 }
 
 message GetEventsResponse {
@@ -78,6 +80,7 @@ message CreateEventRequest {
 message CreateEventResponse {
   string error = 1;
   bool ok = 2;
+  string id = 3;
 }
 
 message UpdateEventRequest {
@@ -96,4 +99,13 @@ message DeleteEventRequest {
 message DeleteEventResponse {
   string error = 1;
   bool ok = 2;
+}
+
+message User {
+	string user_id = 1;
+  string email = 2;
+	string name = 3;
+	string picture = 4;
+	string nickname = 5;
+	string sub = 6;
 }

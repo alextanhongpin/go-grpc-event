@@ -60,7 +60,7 @@ func GetUnaryClientInterceptor() grpc.UnaryClientInterceptor {
 		log.Println(ctx)
 		// Note that this metadata also receives the `Grpc-Metadata-<field>` set from the headers in
 		// a curl request
-		md, _ := metadata.FromOutgoingContext(ctx)
+		md, ok := metadata.FromOutgoingContext(ctx)
 		if ok {
 			// Override context if the user is in the whitelist
 			roles := md["role"]
