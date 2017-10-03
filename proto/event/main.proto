@@ -1,5 +1,5 @@
 syntax = "proto3";
-package eventprivate;
+package event;
 
 import "google/api/annotations.proto";
 
@@ -111,4 +111,5 @@ message User {
 	string picture = 4;
 	string nickname = 5;
 	string sub = 6;
+  bool is_anonymous = 7;
 }

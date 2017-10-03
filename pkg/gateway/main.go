@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
@@ -9,14 +8,19 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/grpc-ecosystem/go-grpc-middleware"
+	"github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
+
 	// auth0 "github.com/auth0-community/go-auth0"
 	"github.com/golang/glog"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/alextanhongpin/go-grpc-event/internal/auth0"
 	"github.com/alextanhongpin/go-grpc-event/internal/cors"
-	gw "github.com/alextanhongpin/go-grpc-event/proto/event-private"
+	jaeger "github.com/alextanhongpin/go-grpc-event/internal/jaeger"
+	gw "github.com/alextanhongpin/go-grpc-event/proto/event"
 )
 
 // Response represents the payload that is returned on error
@@ -27,6 +31,8 @@ type Response struct {
 var auth0Validator *auth0.Auth0
 var whitelist []string
 
+var TraceKey string = "tracer"
+
 func run() error {
 	var (
 		addr              = flag.String("addr", "localhost:8081", "Address of the private event GRPC service")
@@ -35,6 +41,7 @@ func run() error {
 		auth0APIIssuer    = flag.String("auth0_iss", "", "Auth0 api issuer available at auth0 dashboard")
 		auth0APIAudience  = flag.String("auth0_aud", "", "Auth0 api audience available at auth0 dashboard")
 		whitelistedEmails = flag.String("whitelisted_emails", "", "A list of admin emails that are whitelisted")
+		tracerKind        = flag.String("tracker_kind", "grpc_gateway_event", "Namespace for the opentracing")
 	)
 	flag.Parse()
 
@@ -45,15 +52,30 @@ func run() error {
 		}
 	}
 
+	trc, closer := jaeger.New(*tracerKind)
+	defer closer.Close()
+
+	tracerOpts := []grpc_opentracing.Option{
+		grpc_opentracing.WithTracer(trc),
+	}
+
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	opts := []grpc.DialOption{
 		grpc.WithInsecure(),
+		grpc.WithUnaryInterceptor(grpc_middleware.ChainUnaryClient(
+			GetUnaryClientInterceptor(),
+			grpc_opentracing.UnaryClientInterceptor(tracerOpts...),
+		)),
 	}
 
-	mux := runtime.NewServeMux()
+	mux := runtime.NewServeMux(runtime.WithMarshalerOption(
+		runtime.MIMEWildcard,
+		&runtime.JSONPb{EnumsAsInts: true, OrigName: true, EmitDefaults: false}),
+	)
+
 	if err := gw.RegisterEventServiceHandlerFromEndpoint(ctx, mux, *addr, opts); err != nil {
 		return err
 	}
@@ -67,7 +89,7 @@ func run() error {
 
 	log.Printf("grpc_server = %s\n", *addr)
 	log.Printf("listening to port *%s. press ctrl + c to cancel.\n", *port)
-	return http.ListenAndServe(*port, cors.New(checkJWT(mux)))
+	return http.ListenAndServe(*port, cors.New(mux))
 }
 
 func main() {
@@ -77,86 +99,67 @@ func main() {
 	}
 }
 
-func checkJWT(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
-		// Is public user
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			h.ServeHTTP(w, r)
-			return
+func GetUnaryClientInterceptor() grpc.UnaryClientInterceptor {
+	return func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+		md, ok := metadata.FromOutgoingContext(ctx)
+		if !ok {
+			return invoker(ctx, method, req, reply, cc, opts...)
 		}
 
-		_, err := auth0Validator.Validate(r)
-		// log.Println("got token", token)
+		r, _ := http.NewRequest("", "http://localhost", nil)
+		authHeader, ok := md["authorization"]
+		if ok && len(authHeader) > 0 {
+			r.Header.Add("Authorization", authHeader[0])
+			_, err := auth0Validator.Validate(r)
+			if err != nil {
+				log.Println("error validating lo")
+			}
 
-		if err != nil {
-			log.Printf("Error validating token: %#v\n", err)
-			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(Response{
-				Message: "Missing or invalid token.",
-			})
-			return
+			md = metadata.Pairs("holla!", "Bearer XXXX")
+			ctx = metadata.NewContext(ctx, md)
+			ctx, err = fetchUserDetails(ctx, authHeader[0])
+			if err != nil {
+				log.Println("error fetching user details", err)
+			}
+			return invoker(ctx, method, req, reply, cc, opts...)
 		}
-
-		// Fetch the user details and pass it through the grpc-metadata
-		if err = fetchUserDetails(r); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(Response{
-				Message: "Unable to get users data.",
-			})
-			return
-		}
-		h.ServeHTTP(w, r)
-	})
+		return invoker(ctx, method, req, reply, cc, opts...)
+	}
 }
 
-func fetchUserDetails(r *http.Request) error {
+func fetchUserDetails(ctx context.Context, auth string) (context.Context, error) {
+	// Start a new span
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", "https://engineersmy.auth0.com/userinfo", nil)
 	if err != nil {
-		return err
+		return ctx, err
 	}
-	req.Header.Add("Authorization", r.Header.Get("Authorization"))
+
+	req.Header.Add("Authorization", auth)
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return ctx, err
 	}
 	defer resp.Body.Close()
 
 	userinfo := make(map[string]string) // UserInfo
-
 	if err = json.NewDecoder(resp.Body).Decode(&userinfo); err != nil {
-		return err
-	}
-
-	// TODO: Verify that the headers cannot be injected from outside
-	r.Header.Set("Grpc-Metadata-Admin", "")
-	r.Header.Set("Grpc-Metadata-email", "")
-	r.Header.Set("Grpc-Metadata-name", "")
-	r.Header.Set("Grpc-Metadata-picture", "")
-	r.Header.Set("Grpc-Metadata-user_id", "")
-	r.Header.Set("Grpc-Metadata-nickname", "")
-	r.Header.Set("Grpc-Metadata-sub", "")
-
-	// For each of the users metadata present, write it to the grpc-metadata
-	for k, v := range userinfo {
-		var buff bytes.Buffer
-		buff.WriteString("Grpc-Metadata-")
-		buff.WriteString(k)
-		r.Header.Set(buff.String(), v)
+		return ctx, err
 	}
 
 	if email, ok := userinfo["email"]; ok {
 		if len(whitelist) > 0 {
 			for _, v := range whitelist {
 				if v == email {
-					r.Header.Set("Grpc-Metadata-Admin", "true")
+					userinfo["admin"] = "true"
 				}
 			}
 		}
 	}
 
+	md := metadata.New(userinfo)
+	ctx = metadata.NewOutgoingContext(ctx, md)
+
 	// Do a checking to see the user emails which are whitelisted
-	return nil
+	return ctx, nil
 }

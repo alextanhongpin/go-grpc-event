@@ -2,10 +2,8 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"net"
-	"os"
 	"strings"
 	"time"
 
@@ -20,13 +18,14 @@ import (
 	"gopkg.in/mgo.v2/bson"
 
 	"github.com/alextanhongpin/go-grpc-event/internal/database"
-	"github.com/alextanhongpin/go-grpc-event/internal/tracer"
-	pb "github.com/alextanhongpin/go-grpc-event/proto/event-private"
+	jaeger "github.com/alextanhongpin/go-grpc-event/internal/jaeger"
+	pb "github.com/alextanhongpin/go-grpc-event/proto/event"
+	otlog "github.com/opentracing/opentracing-go/log"
 )
 
 type eventServer struct {
-	db     *database.Database
-	tracer opentracing.Tracer
+	db  *database.Database
+	trc opentracing.Tracer
 }
 
 // UserInfo represents the schema from the auth0 userinfo endpoint
@@ -61,9 +60,19 @@ func (s eventServer) GetEvents(ctx context.Context, msg *pb.GetEventsRequest) (*
 	sess := s.db.Copy()
 	defer sess.Close()
 
-	span, ctx := opentracing.StartSpanFromContext(ctx, "GetEvents")
+	// usr := getUserInfoFromCtx(ctx)
+	// log.Println("got users", usr)
+	var parentCtx opentracing.SpanContext
+	parentSpan := opentracing.SpanFromContext(ctx)
+	if parentSpan != nil {
+		parentCtx = parentSpan.Context()
+	}
+	span := s.trc.StartSpan("GetEvents", opentracing.ChildOf(parentCtx))
+
+	// span, ctx := opentracing.StartSpanFromContext(ctx, "GetEvents")
 	defer span.Finish()
 
+	span.LogFields(otlog.String("hello", "World"))
 	c := s.db.Collection(sess, "events")
 
 	var tmpEvents []Event
@@ -83,6 +92,13 @@ func (s eventServer) GetEvents(ctx context.Context, msg *pb.GetEventsRequest) (*
 		// Convert the objectId to string id
 		event.Id = event.ID.Hex()
 		cvt := pb.Event(event.Event)
+		// Delete the user sub
+		if cvt.User != nil {
+			// if cvt.User.isAnonymous, remove all users object
+			cvt.User.UserId = ""
+			cvt.User.Sub = ""
+		}
+
 		events = append(events, &cvt)
 	}
 	return &pb.GetEventsResponse{
@@ -268,17 +284,17 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-
-	trc, err := tracer.New(
-		tracer.Name(*tracerKind),
-		tracer.Host(*tracerHost),
-	)
-	if err != nil {
-		fmt.Printf("unable to create Zipkin tracer: %+v\n", err)
-		os.Exit(-1)
-	}
-	// trc, closer := hunter.New()
-	// defer closer.Close()
+	_ = tracerHost
+	// trc, err := tracer.New(
+	// 	tracer.Name(*tracerKind),
+	// 	tracer.Host(*tracerHost),
+	// )
+	// if err != nil {
+	// 	fmt.Printf("unable to create Zipkin tracer: %+v\n", err)
+	// 	os.Exit(-1)
+	// }
+	trc, closer := jaeger.New(*tracerKind)
+	defer closer.Close()
 
 	tracerOpts := []grpc_opentracing.Option{
 		grpc_opentracing.WithTracer(trc),
@@ -311,7 +327,8 @@ func main() {
 	)
 
 	pb.RegisterEventServiceServer(grpcServer, &eventServer{
-		db: db,
+		db:  db,
+		trc: trc,
 	})
 
 	log.Printf("listening to port *%s. press ctrl + c to cancel.\n", *port)
@@ -320,6 +337,7 @@ func main() {
 
 func getUserInfoFromCtx(ctx context.Context) *UserInfo {
 	md, ok := metadata.FromIncomingContext(ctx)
+	log.Println("metadata", md)
 	if !ok {
 		return nil
 	}
