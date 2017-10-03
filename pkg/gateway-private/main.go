@@ -19,20 +19,6 @@ import (
 	gw "github.com/alextanhongpin/go-grpc-event/proto/event-private"
 )
 
-// UserInfo represents the schema from the auth0 userinfo endpoint
-// type UserInfo struct {
-// 	EmailVerified bool   `json:"email_verified"` // false
-// 	Email         string `json:"email"`          // "test.account@userinfo.com"
-// 	ClientID      string `json:"clientID"`       // "q2hnj2iu..."
-// 	UpdatedAt     string `json:"updated_at"`     // "2016-12-05T15:15:40.545Z"
-// 	Name          string `json:"name"`           //  "test.account@userinfo.com"
-// 	Picture       string `json:"picture"`        // "https://s.gravatar.com/avatar/dummy.png"
-// 	UserID        string `json:"user_id"`        // "auth0|58454..."
-// 	Nickname      string `json:"nickname"`       // "test.account"
-// 	CreatedAt     string `json:"created_at"`     // "2016-12-05T11:16:59.640Z"
-// 	Sub           string `json:"sub"`            // "auth0|58454..."
-// }
-
 // Response represents the payload that is returned on error
 type Response struct {
 	Message string `json:"message"`
@@ -145,17 +131,13 @@ func fetchUserDetails(r *http.Request) error {
 	}
 
 	// TODO: Verify that the headers cannot be injected from outside
-	// r.Header.Set("Grpc-Metadata-Email", "")
-	// 	EmailVerified bool   `json:"email_verified"` // false
-	// 	Email         string `json:"email"`          // "test.account@userinfo.com"
-	// 	ClientID      string `json:"clientID"`       // "q2hnj2iu..."
-	// 	UpdatedAt     string `json:"updated_at"`     // "2016-12-05T15:15:40.545Z"
-	// 	Name          string `json:"name"`           //  "test.account@userinfo.com"
-	// 	Picture       string `json:"picture"`        // "https://s.gravatar.com/avatar/dummy.png"
-	// 	UserID        string `json:"user_id"`        // "auth0|58454..."
-	// 	Nickname      string `json:"nickname"`       // "test.account"
-	// 	CreatedAt     string `json:"created_at"`     // "2016-12-05T11:16:59.640Z"
-	// 	Sub           string `json:"sub"`            // "auth0|58454..."
+	r.Header.Set("Grpc-Metadata-Admin", "")
+	r.Header.Set("Grpc-Metadata-email", "")
+	r.Header.Set("Grpc-Metadata-name", "")
+	r.Header.Set("Grpc-Metadata-picture", "")
+	r.Header.Set("Grpc-Metadata-user_id", "")
+	r.Header.Set("Grpc-Metadata-nickname", "")
+	r.Header.Set("Grpc-Metadata-sub", "")
 
 	// For each of the users metadata present, write it to the grpc-metadata
 	for k, v := range userinfo {
@@ -164,6 +146,7 @@ func fetchUserDetails(r *http.Request) error {
 		buff.WriteString(k)
 		r.Header.Set(buff.String(), v)
 	}
+
 	if email, ok := userinfo["email"]; ok {
 		if len(whitelist) > 0 {
 			for _, v := range whitelist {

@@ -58,11 +58,14 @@ message Event {
 
 message GetEventsRequest {
   string query = 1;
-  bool is_published = 2;
+  string filter = 2;
+  // bool is_published = 2;
 }
 
 message GetEventsResponse {
   repeated Event data = 1;
+  int64 count = 2;
+  // Add pagination
 }
 
 message GetEventRequest {

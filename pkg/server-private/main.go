@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware"
@@ -67,9 +68,12 @@ func (s eventServer) GetEvents(ctx context.Context, msg *pb.GetEventsRequest) (*
 
 	var tmpEvents []Event
 
-	if err := c.Find(bson.M{
-	// "is_published": msg.IsPublished,
-	}).All(&tmpEvents); err != nil {
+	query := bson.M{}
+	if msg.Filter != "" && strings.Contains(msg.Filter, "published") {
+		query["is_published"] = !strings.Contains(msg.Filter, "-")
+	}
+
+	if err := c.Find(query).All(&tmpEvents); err != nil {
 		span.SetTag("error", err.Error())
 		return nil, err
 	}
@@ -82,7 +86,8 @@ func (s eventServer) GetEvents(ctx context.Context, msg *pb.GetEventsRequest) (*
 		events = append(events, &cvt)
 	}
 	return &pb.GetEventsResponse{
-		Data: events,
+		Data:  events,
+		Count: int64(len(events)),
 	}, nil
 }
 
@@ -114,38 +119,54 @@ func (s eventServer) GetEvent(ctx context.Context, msg *pb.GetEventRequest) (*pb
 
 func (s eventServer) CreateEvent(ctx context.Context, msg *pb.CreateEventRequest) (*pb.CreateEventResponse, error) {
 
-	span, ctx := opentracing.StartSpanFromContext(ctx, "CreateEvent")
+	span, ctx := opentracing.StartSpanFromContext(ctx, "create-event")
 	defer span.Finish()
 
 	usr := getUserInfoFromCtx(ctx)
-	if !usr.IsAdmin() {
-		span.SetTag("error", "User is not authorized to perform this action")
-		return nil, grpc.Errorf(codes.Unauthenticated, "User is not authorized to perform this action")
-	}
+	// if !usr.IsAdmin() {
+	// 	span.SetTag("error", "User is not authorized to perform this action")
+	// 	return nil, grpc.Errorf(codes.Unauthenticated, "User is not authorized to perform this action")
+	// }
 
 	sess := s.db.Copy()
 	defer sess.Close()
 
 	// Create a new id, because we want to return it after creating
-	// id := bson.NewObjectId()
+	id := bson.NewObjectId()
 	c := s.db.Collection(sess, "events")
 
-	// msg.Data.ID = id
 	msg.Data.CreatedAt = time.Now().UnixNano() / 1000000
 	msg.Data.UpdatedAt = time.Now().UnixNano() / 1000000
 	msg.Data.IsPublished = usr.IsAdmin() // Events created by admin defaults to true
 
+	if usr.IsAdmin() {
+		msg.Data.User = &pb.User{
+			UserId:   usr.Sub,
+			Email:    usr.Email,
+			Name:     usr.Name,
+			Picture:  usr.Picture,
+			Nickname: usr.Nickname,
+			Sub:      usr.Sub,
+		}
+	}
+	evt := Event{
+		id,
+		*msg.Data,
+	}
+
+	log.Println("got event", evt)
+
 	// Set user
 	// msg.Data.User = usr
 
-	if err := c.Insert(msg.Data); err != nil {
+	if err := c.Insert(evt); err != nil {
 		span.SetTag("error", err.Error())
 		return nil, err
 	}
 
 	return &pb.CreateEventResponse{
 		Ok: true,
-		// Id: id,
+		Id: id.Hex(),
 	}, nil
 }
 
@@ -296,22 +317,6 @@ func main() {
 	log.Printf("listening to port *%s. press ctrl + c to cancel.\n", *port)
 	grpcServer.Serve(lis)
 }
-
-// func SomeInterceptor() grpc.UnaryServerInterceptor {
-// 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-// 		log.Println("unary auth interceptor", req, info)
-// 		// log.Println("in UnaryServerInterceptor")
-// 		// log.Println(ctx)
-// 		// // Note that this metadata also receives the `Grpc-Metadata-<field>` set from the headers in
-// 		// // a curl request
-// 		md, ok := metadata.FromIncomingContext(ctx)
-// 		if ok {
-// 			log.Println("Got metadata", md)
-// 		}
-
-// 		return handler(ctx, req)
-// 	}
-// }
 
 func getUserInfoFromCtx(ctx context.Context) *UserInfo {
 	md, ok := metadata.FromIncomingContext(ctx)

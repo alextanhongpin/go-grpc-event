@@ -255,6 +255,16 @@ func GetUnaryClientInterceptor() grpc.UnaryClientInterceptor {
 
 ```
 
+
+## Error handling for grpc
+
+```go
+	if !usr.IsAdmin() {
+		span.SetTag("error", "User is not authorized to perform this action")
+		return nil, grpc.Errorf(codes.Unauthenticated, "User is not authorized to perform this action")
+	}
+```
+
 ## To enable opentracing for the jaeger library:
 
 ```
