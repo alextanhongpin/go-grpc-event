@@ -1,12 +1,12 @@
 package main
 
 import (
-	"flag"
 	"log"
 	"net"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
+	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	mgo "gopkg.in/mgo.v2"
 
@@ -16,20 +16,12 @@ import (
 )
 
 func main() {
-	var (
-		port       = flag.String("port", ":8080", "TCP port to listen on")
-		mgoHost    = flag.String("mgo_host", "mongodb://localhost:27017", "MongoDB uri string")
-		tracerKind = flag.String("tracer_kind", "event", "The namespace of the tracer we are running")
-	)
-
-	flag.Parse()
-
-	lis, err := net.Listen("tcp", *port)
+	lis, err := net.Listen("tcp", viper.GetString("port"))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	trc, closer := jaeger.New(*tracerKind)
+	trc, closer := jaeger.New(viper.GetString("tracer"))
 	defer closer.Close()
 
 	tracerOpts := []grpc_opentracing.Option{
@@ -37,7 +29,7 @@ func main() {
 	}
 
 	// TODO: Setup database in `internals`` folder
-	db, err := database.New(database.Host(*mgoHost))
+	db, err := database.New(database.Host(viper.GetString("mgo_host")))
 	if err != nil {
 		log.Fatalf("error connecting to db: %v\n", err)
 	}
@@ -66,6 +58,6 @@ func main() {
 		trc: trc,
 	})
 
-	log.Printf("listening to port *%s. press ctrl + c to cancel.\n", *port)
+	log.Printf("listening to port *%s. press ctrl + c to cancel.\n", viper.GetString("port"))
 	grpcServer.Serve(lis)
 }

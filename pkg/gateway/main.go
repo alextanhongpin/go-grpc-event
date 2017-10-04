@@ -42,6 +42,7 @@ func run() error {
 		auth0APIAudience  = flag.String("auth0_aud", "", "Auth0 api audience available at auth0 dashboard")
 		whitelistedEmails = flag.String("whitelisted_emails", "", "A list of admin emails that are whitelisted")
 		tracerKind        = flag.String("tracker_kind", "gateway", "Namespace for the opentracing")
+		// https://engineersmy.auth0.com/userinfo
 	)
 	flag.Parse()
 
@@ -54,10 +55,6 @@ func run() error {
 
 	trc, closer := jaeger.New(*tracerKind)
 	defer closer.Close()
-
-	// opentracing.SetGlobalTracer(trc)
-
-	// tracer = trc
 
 	tracerOpts := []grpc_opentracing.Option{
 		grpc_opentracing.WithTracer(trc),

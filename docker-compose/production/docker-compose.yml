@@ -30,5 +30,3 @@ services:
       - 5778:5778 # Serve configs
       - 16686:16686 # Serve frontend
       - 14268:14268 # Accept zipkin.thrift from zipkin senders
-
-  

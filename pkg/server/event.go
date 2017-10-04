@@ -56,6 +56,7 @@ func (s eventServer) GetEvents(ctx context.Context, msg *pb.GetEventsRequest) (*
 		// Convert the objectId to string id
 		event.Id = event.ID.Hex()
 		cvt := pb.Event(event.Event)
+
 		// Delete the user sub
 		if cvt.User != nil {
 			// if cvt.User.isAnonymous, remove all users object
@@ -134,8 +135,6 @@ func (s eventServer) CreateEvent(ctx context.Context, msg *pb.CreateEventRequest
 		id,
 		*msg.Data,
 	}
-	// Set user
-	// msg.Data.User = usr
 
 	span.LogEvent("insert")
 	if err := c.Insert(evt); err != nil {
