@@ -4,16 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
 
+	"github.com/golang/glog"
 	"github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
-
-	// auth0 "github.com/auth0-community/go-auth0"
-	"github.com/golang/glog"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
+	opentracing "github.com/opentracing/opentracing-go"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
@@ -30,6 +30,7 @@ type Response struct {
 
 var auth0Validator *auth0.Auth0
 var whitelist []string
+var tracer opentracing.Tracer
 
 var TraceKey string = "tracer"
 
@@ -55,6 +56,8 @@ func run() error {
 	trc, closer := jaeger.New(*tracerKind)
 	defer closer.Close()
 
+	tracer = trc
+
 	tracerOpts := []grpc_opentracing.Option{
 		grpc_opentracing.WithTracer(trc),
 	}
@@ -66,8 +69,8 @@ func run() error {
 	opts := []grpc.DialOption{
 		grpc.WithInsecure(),
 		grpc.WithUnaryInterceptor(grpc_middleware.ChainUnaryClient(
-			GetUnaryClientInterceptor(),
 			grpc_opentracing.UnaryClientInterceptor(tracerOpts...),
+			AuthClientInterceptor(),
 		)),
 	}
 
@@ -99,8 +102,17 @@ func main() {
 	}
 }
 
-func GetUnaryClientInterceptor() grpc.UnaryClientInterceptor {
+// AuthClientInterceptor is a middleware to carry out authorization
+func AuthClientInterceptor() grpc.UnaryClientInterceptor {
 	return func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+		var parentCtx opentracing.SpanContext
+		parentSpan := opentracing.SpanFromContext(ctx)
+		if parentSpan != nil {
+			parentCtx = parentSpan.Context()
+		}
+		span := tracer.StartSpan("jwt", opentracing.ChildOf(parentCtx))
+		defer span.Finish()
+
 		md, ok := metadata.FromOutgoingContext(ctx)
 		if !ok {
 			return invoker(ctx, method, req, reply, cc, opts...)
@@ -109,41 +121,68 @@ func GetUnaryClientInterceptor() grpc.UnaryClientInterceptor {
 		r, _ := http.NewRequest("", "http://localhost", nil)
 		authHeader, ok := md["authorization"]
 		if ok && len(authHeader) > 0 {
+			var err error
 			r.Header.Add("Authorization", authHeader[0])
-			_, err := auth0Validator.Validate(r)
-			if err != nil {
-				log.Println("error validating lo")
+			span.LogEvent("validate:start")
+			if _, err = auth0Validator.Validate(r); err != nil {
+				span.SetTag("error", err.Error())
+				return err
 			}
+			span.LogEvent("validate:end")
+			// User is authorized
+			span.LogKV("guest", "true")
 
-			md = metadata.Pairs("holla!", "Bearer XXXX")
-			ctx = metadata.NewContext(ctx, md)
 			ctx, err = fetchUserDetails(ctx, authHeader[0])
 			if err != nil {
-				log.Println("error fetching user details", err)
+				span.SetTag("error", fmt.Sprintf("Unable to fetch user details: %#v", err.Error()))
+				return err
 			}
 			return invoker(ctx, method, req, reply, cc, opts...)
 		}
+		span.LogKV("guest", "false")
+
+		// newMd := metautils.ExtractOutgoing(ctx).Clone()
+		// if err := tracer.Inject(span.Context(), opentracing.HTTPHeaders, metadata.MD(newMd)); err != nil {
+		// 	log.Printf("grpc_opentracing: failed serializing trace information: %v", err)
+		// }
+		// ctxWithMetadata := newMd.ToOutgoing(ctx)
+		// ctx = opentracing.ContextWithSpan(ctxWithMetadata, span)
+
 		return invoker(ctx, method, req, reply, cc, opts...)
 	}
 }
 
 func fetchUserDetails(ctx context.Context, auth string) (context.Context, error) {
+	var parentCtx opentracing.SpanContext
+	var parentSpan = opentracing.SpanFromContext(ctx)
+	if parentSpan != nil {
+		parentCtx = parentSpan.Context()
+	}
+	span := tracer.StartSpan("userinfo", opentracing.ChildOf(parentCtx))
+	defer span.Finish()
+
 	// Start a new span
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", "https://engineersmy.auth0.com/userinfo", nil)
 	if err != nil {
+		msg := fmt.Sprintf("Error creating new userinfor request: %s", err.Error())
+		span.SetTag("error", msg)
 		return ctx, err
 	}
 
 	req.Header.Add("Authorization", auth)
 	resp, err := client.Do(req)
 	if err != nil {
+		msg := fmt.Sprintf("Error getting user info: %s", err.Error())
+		span.SetTag("error", msg)
 		return ctx, err
 	}
 	defer resp.Body.Close()
 
 	userinfo := make(map[string]string) // UserInfo
 	if err = json.NewDecoder(resp.Body).Decode(&userinfo); err != nil {
+		msg := fmt.Sprintf("Error decoding userinfo: %s", err.Error())
+		span.SetTag("error", msg)
 		return ctx, err
 	}
 
@@ -159,7 +198,9 @@ func fetchUserDetails(ctx context.Context, auth string) (context.Context, error)
 
 	md := metadata.New(userinfo)
 	ctx = metadata.NewOutgoingContext(ctx, md)
-
 	// Do a checking to see the user emails which are whitelisted
+
+	span.LogKV("userinfo", "true")
+	// newCtx := opentracing.ContextWithSpan(ctx, span)
 	return ctx, nil
 }

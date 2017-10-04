@@ -169,9 +169,6 @@ func (s eventServer) CreateEvent(ctx context.Context, msg *pb.CreateEventRequest
 		id,
 		*msg.Data,
 	}
-
-	log.Println("got event", evt)
-
 	// Set user
 	// msg.Data.User = usr
 
@@ -337,7 +334,6 @@ func main() {
 
 func getUserInfoFromCtx(ctx context.Context) *UserInfo {
 	md, ok := metadata.FromIncomingContext(ctx)
-	log.Println("metadata", md)
 	if !ok {
 		return nil
 	}
