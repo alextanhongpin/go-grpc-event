@@ -1,5 +1,15 @@
 package tracer
 
+// Usage
+//
+// trc, err := tracer.New(
+// 	tracer.Name(*tracerKind),
+// 	tracer.Host(*tracerHost), // "http://localhost:9411/api/v1/spans"
+// )
+// if err != nil {
+// 	fmt.Printf("unable to create Zipkin tracer: %+v\n", err)
+// 	os.Exit(-1)
+// }
 import (
 	opentracing "github.com/opentracing/opentracing-go"
 	zipkin "github.com/openzipkin/zipkin-go-opentracing"

@@ -56,6 +56,8 @@ func run() error {
 	trc, closer := jaeger.New(*tracerKind)
 	defer closer.Close()
 
+	opentracing.SetGlobalTracer(trc)
+
 	tracer = trc
 
 	tracerOpts := []grpc_opentracing.Option{
@@ -110,7 +112,8 @@ func AuthClientInterceptor() grpc.UnaryClientInterceptor {
 		if parentSpan != nil {
 			parentCtx = parentSpan.Context()
 		}
-		span := tracer.StartSpan("jwt", opentracing.ChildOf(parentCtx))
+		// span := tracer.StartSpan("jwt", opentracing.ChildOf(parentCtx))
+		span := opentracing.GlobalTracer().StartSpan("authorization", opentracing.ChildOf(parentCtx))
 		defer span.Finish()
 
 		md, ok := metadata.FromOutgoingContext(ctx)
@@ -118,74 +121,68 @@ func AuthClientInterceptor() grpc.UnaryClientInterceptor {
 			return invoker(ctx, method, req, reply, cc, opts...)
 		}
 
-		r, _ := http.NewRequest("", "http://localhost", nil)
-		authHeader, ok := md["authorization"]
-		if ok && len(authHeader) > 0 {
-			var err error
+		if authHeader, ok := md["authorization"]; ok && len(authHeader) > 0 {
+			// Create a new request object
+			r, _ := http.NewRequest("", "http://localhost", nil)
+
+			// Add the authorization header
 			r.Header.Add("Authorization", authHeader[0])
-			span.LogEvent("validate:start")
-			if _, err = auth0Validator.Validate(r); err != nil {
+			span.LogEvent("request:start")
+
+			if _, err := auth0Validator.Validate(r); err != nil {
 				span.SetTag("error", err.Error())
 				return err
 			}
-			span.LogEvent("validate:end")
-			// User is authorized
+			span.LogEvent("request:end")
 			span.LogKV("guest", "true")
-
-			ctx, err = fetchUserDetails(ctx, authHeader[0])
+			span.LogEvent("fetch_user:start")
+			md, err := fetchUserDetails(span.Context(), authHeader[0])
 			if err != nil {
-				span.SetTag("error", fmt.Sprintf("Unable to fetch user details: %#v", err.Error()))
+				span.LogKV("error", fmt.Sprintf("Unable to fetch user details: %#v", err.Error()))
 				return err
 			}
-			return invoker(ctx, method, req, reply, cc, opts...)
+			span.LogEvent("fetch_user:end")
+			ctx = metadata.NewIncomingContext(ctx, md)
+		} else {
+			span.LogKV("guest", "false")
 		}
-		span.LogKV("guest", "false")
-
-		// newMd := metautils.ExtractOutgoing(ctx).Clone()
-		// if err := tracer.Inject(span.Context(), opentracing.HTTPHeaders, metadata.MD(newMd)); err != nil {
-		// 	log.Printf("grpc_opentracing: failed serializing trace information: %v", err)
-		// }
-		// ctxWithMetadata := newMd.ToOutgoing(ctx)
-		// ctx = opentracing.ContextWithSpan(ctxWithMetadata, span)
-
 		return invoker(ctx, method, req, reply, cc, opts...)
 	}
 }
 
-func fetchUserDetails(ctx context.Context, auth string) (context.Context, error) {
-	var parentCtx opentracing.SpanContext
-	var parentSpan = opentracing.SpanFromContext(ctx)
-	if parentSpan != nil {
-		parentCtx = parentSpan.Context()
-	}
-	span := tracer.StartSpan("userinfo", opentracing.ChildOf(parentCtx))
+func fetchUserDetails(parentCtx opentracing.SpanContext, auth string) (metadata.MD, error) {
+	var md metadata.MD
+	span := opentracing.StartSpan("userinfo", opentracing.ChildOf(parentCtx))
 	defer span.Finish()
 
 	// Start a new span
 	client := &http.Client{}
+	span.LogEvent("create_request")
 	req, err := http.NewRequest("GET", "https://engineersmy.auth0.com/userinfo", nil)
 	if err != nil {
 		msg := fmt.Sprintf("Error creating new userinfor request: %s", err.Error())
 		span.SetTag("error", msg)
-		return ctx, err
+		return md, err
 	}
 
 	req.Header.Add("Authorization", auth)
+	span.LogEvent("make_request")
 	resp, err := client.Do(req)
 	if err != nil {
 		msg := fmt.Sprintf("Error getting user info: %s", err.Error())
 		span.SetTag("error", msg)
-		return ctx, err
+		return md, err
 	}
 	defer resp.Body.Close()
 
 	userinfo := make(map[string]string) // UserInfo
+	span.LogEvent("decode_payload")
 	if err = json.NewDecoder(resp.Body).Decode(&userinfo); err != nil {
 		msg := fmt.Sprintf("Error decoding userinfo: %s", err.Error())
 		span.SetTag("error", msg)
-		return ctx, err
+		return md, err
 	}
-
+	span.LogEvent("extract_metadata")
 	if email, ok := userinfo["email"]; ok {
 		if len(whitelist) > 0 {
 			for _, v := range whitelist {
@@ -195,12 +192,6 @@ func fetchUserDetails(ctx context.Context, auth string) (context.Context, error)
 			}
 		}
 	}
-
-	md := metadata.New(userinfo)
-	ctx = metadata.NewOutgoingContext(ctx, md)
-	// Do a checking to see the user emails which are whitelisted
-
-	span.LogKV("userinfo", "true")
-	// newCtx := opentracing.ContextWithSpan(ctx, span)
-	return ctx, nil
+	md = metadata.New(userinfo)
+	return md, nil
 }
