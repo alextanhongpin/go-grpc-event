@@ -1,19 +1,22 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
-	"github.com/alextanhongpin/go-grpc-event/internal/database"
-	pb "github.com/alextanhongpin/go-grpc-event/proto/event"
 	"github.com/opentracing/opentracing-go"
-	otlog "github.com/opentracing/opentracing-go/log"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"gopkg.in/mgo.v2/bson"
+
+	"github.com/alextanhongpin/go-grpc-event/internal/database"
+	jaeger "github.com/alextanhongpin/go-grpc-event/internal/jaeger"
+	pb "github.com/alextanhongpin/go-grpc-event/proto/event"
 )
 
+// Event represents the event payload with additional fields to shadow the proto-generate struct
 type Event struct {
 	ID       bson.ObjectId `bson:"_id,omitempty"`
 	pb.Event `bson:",inline"`
@@ -25,22 +28,12 @@ type eventServer struct {
 }
 
 func (s eventServer) GetEvents(ctx context.Context, msg *pb.GetEventsRequest) (*pb.GetEventsResponse, error) {
-	sess := s.db.Copy()
-	defer sess.Close()
-
-	// usr := getUserInfoFromCtx(ctx)
-	// log.Println("got users", usr)
-	var parentCtx opentracing.SpanContext
-	parentSpan := opentracing.SpanFromContext(ctx)
-	if parentSpan != nil {
-		parentCtx = parentSpan.Context()
-	}
-	span := s.trc.StartSpan("get_events", opentracing.ChildOf(parentCtx))
-
-	// span, ctx := opentracing.StartSpanFromContext(ctx, "GetEvents")
+	span := jaeger.NewSpanFromContext(ctx, "get_events")
 	defer span.Finish()
 
-	span.LogFields(otlog.String("hello", "World"))
+	span.LogEvent("create_session")
+	sess := s.db.Copy()
+	defer sess.Close()
 	c := s.db.Collection(sess, "events")
 
 	var tmpEvents []Event
@@ -50,11 +43,14 @@ func (s eventServer) GetEvents(ctx context.Context, msg *pb.GetEventsRequest) (*
 		query["is_published"] = !strings.Contains(msg.Filter, "-")
 	}
 
+	span.LogEvent("query")
 	if err := c.Find(query).All(&tmpEvents); err != nil {
-		span.SetTag("error", err.Error())
+		msg := fmt.Sprintf("Error performing query: %s", err.Error())
+		span.SetTag("error", msg)
 		return nil, err
 	}
 
+	span.LogEvent("parse")
 	var events []*pb.Event
 	for _, event := range tmpEvents {
 		// Convert the objectId to string id
@@ -76,24 +72,26 @@ func (s eventServer) GetEvents(ctx context.Context, msg *pb.GetEventsRequest) (*
 }
 
 func (s eventServer) GetEvent(ctx context.Context, msg *pb.GetEventRequest) (*pb.GetEventResponse, error) {
-
-	span, ctx := opentracing.StartSpanFromContext(ctx, "GetEvent")
+	span := jaeger.NewSpanFromContext(ctx, "get_event")
 	defer span.Finish()
 
+	span.LogEvent("validate_id")
 	if !bson.IsObjectIdHex(msg.Id) {
 		span.SetTag("error", "Event does not exist or has been deleted")
 		return nil, grpc.Errorf(codes.FailedPrecondition, "Event does not exist or has been deleted")
 	}
+	span.LogEvent("create_session")
 	sess := s.db.Copy()
 	defer sess.Close()
-
 	c := s.db.Collection(sess, "events")
 
 	var tmpEvt Event
+	span.LogEvent("query")
 	if err := c.FindId(bson.ObjectIdHex(msg.Id)).One(&tmpEvt); err != nil {
 		span.SetTag("error", err.Error())
 		return nil, err
 	}
+	span.LogEvent("parse")
 	tmpEvt.Id = tmpEvt.ID.Hex()
 	evt := &pb.GetEventResponse{
 		Data: &tmpEvt.Event,
@@ -102,23 +100,21 @@ func (s eventServer) GetEvent(ctx context.Context, msg *pb.GetEventRequest) (*pb
 }
 
 func (s eventServer) CreateEvent(ctx context.Context, msg *pb.CreateEventRequest) (*pb.CreateEventResponse, error) {
-
-	span, ctx := opentracing.StartSpanFromContext(ctx, "create-event")
+	span := jaeger.NewSpanFromContext(ctx, "create_event")
 	defer span.Finish()
 
-	var usr UserInfo
-	usr.Extract(ctx)
-	// if !usr.IsAdmin() {
-	// 	span.SetTag("error", "User is not authorized to perform this action")
-	// 	return nil, grpc.Errorf(codes.Unauthenticated, "User is not authorized to perform this action")
-	// }
-
+	span.LogEvent("create_session")
 	sess := s.db.Copy()
 	defer sess.Close()
+	c := s.db.Collection(sess, "events")
+
+	span.LogEvent("get_metadata")
+	var usr UserInfo
+	usr.Extract(ctx)
+	span.LogEventWithPayload("metadata", usr)
 
 	// Create a new id, because we want to return it after creating
 	id := bson.NewObjectId()
-	c := s.db.Collection(sess, "events")
 
 	msg.Data.CreatedAt = time.Now().UnixNano() / 1000000
 	msg.Data.UpdatedAt = time.Now().UnixNano() / 1000000
@@ -141,11 +137,14 @@ func (s eventServer) CreateEvent(ctx context.Context, msg *pb.CreateEventRequest
 	// Set user
 	// msg.Data.User = usr
 
+	span.LogEvent("insert")
 	if err := c.Insert(evt); err != nil {
-		span.SetTag("error", err.Error())
+		msg := fmt.Sprintf("Error inserting data: %s", err.Error())
+		span.SetTag("error", msg)
 		return nil, err
 	}
 
+	span.LogKV("event_id", id.Hex())
 	return &pb.CreateEventResponse{
 		Ok: true,
 		Id: id.Hex(),
@@ -153,23 +152,24 @@ func (s eventServer) CreateEvent(ctx context.Context, msg *pb.CreateEventRequest
 }
 
 func (s eventServer) UpdateEvent(ctx context.Context, msg *pb.UpdateEventRequest) (*pb.UpdateEventResponse, error) {
-	span, ctx := opentracing.StartSpanFromContext(ctx, "UpdateEvent")
+	span := jaeger.NewSpanFromContext(ctx, "update_event")
 	defer span.Finish()
-
+	span.LogEvent("get_metadata")
 	var usr UserInfo
 	usr.Extract(ctx)
+
 	if !usr.IsAdmin() {
 		span.SetTag("error", "User is not authorized to perform this action")
 		return nil, grpc.Errorf(codes.Unauthenticated, "User is not authorized to perform this action")
 	}
-
+	span.LogEvent("validate_id")
 	if !bson.IsObjectIdHex(msg.Data.Id) {
 		span.SetTag("error", "Event does not exist or has been deleted")
 		return nil, grpc.Errorf(codes.FailedPrecondition, "Event does not exist or has been deleted")
 	}
+	span.LogEvent("create_session")
 	sess := s.db.Copy()
 	defer sess.Close()
-
 	c := s.db.Collection(sess, "events")
 
 	// Perform partial update
@@ -198,10 +198,12 @@ func (s eventServer) UpdateEvent(ctx context.Context, msg *pb.UpdateEventRequest
 			}
 		}
 	}
+	span.LogEvent("update")
 	if err := c.UpdateId(bson.ObjectIdHex(msg.Data.Id), bson.M{
 		"$set": m,
 	}); err != nil {
-		span.SetTag("error", err.Error())
+		msg := fmt.Sprintf("Error updating db: %s", err.Error())
+		span.SetTag("error", msg)
 		return nil, err
 	}
 
@@ -211,28 +213,35 @@ func (s eventServer) UpdateEvent(ctx context.Context, msg *pb.UpdateEventRequest
 }
 
 func (s eventServer) DeleteEvent(ctx context.Context, msg *pb.DeleteEventRequest) (*pb.DeleteEventResponse, error) {
-	span, ctx := opentracing.StartSpanFromContext(ctx, "DeleteEvent")
+	span := jaeger.NewSpanFromContext(ctx, "delete_event")
 	defer span.Finish()
 
 	var usr UserInfo
+	span.LogEvent("get_metadata")
 	usr.Extract(ctx)
 	if !usr.IsAdmin() {
 		span.SetTag("error", "User is not authorized to perform this action")
 		return nil, grpc.Errorf(codes.Unauthenticated, "User is not authorized to perform this action")
 	}
 
+	span.LogEvent("validate")
 	if !bson.IsObjectIdHex(msg.Id) {
 		span.SetTag("error", "Event does not exist or has been deleted")
 		return nil, grpc.Errorf(codes.FailedPrecondition, "Event does not exist or has been deleted")
 	}
+
+	span.LogEvent("create_session")
 	sess := s.db.Copy()
 	defer sess.Close()
-
 	c := s.db.Collection(sess, "events")
+
+	span.LogEvent("delete")
 	if err := c.RemoveId(bson.ObjectIdHex(msg.Id)); err != nil {
-		span.SetTag("error", err.Error())
+		msg := fmt.Sprintf("Error deleting from db: %s", err.Error())
+		span.SetTag("error", msg)
 		return nil, err
 	}
+
 	return &pb.DeleteEventResponse{
 		Ok: true,
 	}, nil

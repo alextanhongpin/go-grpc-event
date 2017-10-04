@@ -30,9 +30,8 @@ type Response struct {
 
 var auth0Validator *auth0.Auth0
 var whitelist []string
-var tracer opentracing.Tracer
 
-var TraceKey string = "tracer"
+// var tracer opentracing.Tracer
 
 func run() error {
 	var (
@@ -42,7 +41,7 @@ func run() error {
 		auth0APIIssuer    = flag.String("auth0_iss", "", "Auth0 api issuer available at auth0 dashboard")
 		auth0APIAudience  = flag.String("auth0_aud", "", "Auth0 api audience available at auth0 dashboard")
 		whitelistedEmails = flag.String("whitelisted_emails", "", "A list of admin emails that are whitelisted")
-		tracerKind        = flag.String("tracker_kind", "grpc_gateway_event", "Namespace for the opentracing")
+		tracerKind        = flag.String("tracker_kind", "gateway", "Namespace for the opentracing")
 	)
 	flag.Parse()
 
@@ -56,9 +55,9 @@ func run() error {
 	trc, closer := jaeger.New(*tracerKind)
 	defer closer.Close()
 
-	opentracing.SetGlobalTracer(trc)
+	// opentracing.SetGlobalTracer(trc)
 
-	tracer = trc
+	// tracer = trc
 
 	tracerOpts := []grpc_opentracing.Option{
 		grpc_opentracing.WithTracer(trc),
@@ -107,13 +106,7 @@ func main() {
 // AuthClientInterceptor is a middleware to carry out authorization
 func AuthClientInterceptor() grpc.UnaryClientInterceptor {
 	return func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-		var parentCtx opentracing.SpanContext
-		parentSpan := opentracing.SpanFromContext(ctx)
-		if parentSpan != nil {
-			parentCtx = parentSpan.Context()
-		}
-		// span := tracer.StartSpan("jwt", opentracing.ChildOf(parentCtx))
-		span := opentracing.GlobalTracer().StartSpan("authorization", opentracing.ChildOf(parentCtx))
+		span := jaeger.NewSpanFromContext(ctx, "jwt")
 		defer span.Finish()
 
 		md, ok := metadata.FromOutgoingContext(ctx)
@@ -127,21 +120,19 @@ func AuthClientInterceptor() grpc.UnaryClientInterceptor {
 
 			// Add the authorization header
 			r.Header.Add("Authorization", authHeader[0])
-			span.LogEvent("request:start")
+			span.LogEvent("validate")
 
 			if _, err := auth0Validator.Validate(r); err != nil {
 				span.SetTag("error", err.Error())
 				return err
 			}
-			span.LogEvent("request:end")
 			span.LogKV("guest", "true")
-			span.LogEvent("fetch_user:start")
+			span.LogEvent("fetch_user")
 			md, err := fetchUserDetails(span.Context(), authHeader[0])
 			if err != nil {
-				span.LogKV("error", fmt.Sprintf("Unable to fetch user details: %#v", err.Error()))
+				span.SetTag("error", fmt.Sprintf("Unable to fetch user details: %#v", err.Error()))
 				return err
 			}
-			span.LogEvent("fetch_user:end")
 			ctx = metadata.NewIncomingContext(ctx, md)
 		} else {
 			span.LogKV("guest", "false")

@@ -3,6 +3,7 @@ package hunter
 import (
 	// opentracing "github.com/opentracing/opentracing-go"
 
+	"context"
 	"io"
 	"log"
 	"time"
@@ -50,5 +51,17 @@ func New(tracerKind string) (opentracing.Tracer, io.Closer) {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	opentracing.SetGlobalTracer(tracer)
 	return tracer, closer
+}
+
+// NewSpanFromContext reads the parent context and return a new child context
+func NewSpanFromContext(ctx context.Context, name string) opentracing.Span {
+	var parentCtx opentracing.SpanContext
+	parentSpan := opentracing.SpanFromContext(ctx)
+	if parentSpan != nil {
+		parentCtx = parentSpan.Context()
+	}
+	return opentracing.GlobalTracer().StartSpan(name, opentracing.ChildOf(parentCtx))
 }

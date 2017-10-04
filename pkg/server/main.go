@@ -19,7 +19,7 @@ func main() {
 	var (
 		port       = flag.String("port", ":8080", "TCP port to listen on")
 		mgoHost    = flag.String("mgo_host", "mongodb://localhost:27017", "MongoDB uri string")
-		tracerKind = flag.String("tracer_kind", "grpc_event", "The namespace of the tracer we are running")
+		tracerKind = flag.String("tracer_kind", "event", "The namespace of the tracer we are running")
 	)
 
 	flag.Parse()

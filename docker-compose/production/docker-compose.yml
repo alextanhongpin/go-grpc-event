@@ -6,6 +6,15 @@ services:
       - 27017:27017
     volumes:
       - ./data/db:/data/db
+  
+  metabase:
+    image: metabase/metabase
+    ports:
+      - 3000
+    volumes:
+      - ./metabase-data:/metabase-data
+    environment:
+      - MD_DB_FILE=/metabase-data/metabase.db
 
   openzipkin:
     image: openzipkin/zipkin
@@ -22,31 +31,4 @@ services:
       - 16686:16686 # Serve frontend
       - 14268:14268 # Accept zipkin.thrift from zipkin senders
 
-  # private-server:
-  #   image: alextanhongpin/private-event-server:0.0.2
-  #   ports:
-  #     - 8080
-  #   command: ./app -port :8080 -mgo_host=mongodb://mongo:27017
-
-  # public-server:
-  #   image: alextanhongpin/public-event-server:0.0.2
-  #   ports:
-  #     - 8080
-  #   command: ./app -port :8080 -mgo_host mongodb://mongo:27017 -tracer_host http://openzipkin:9411/api/v1/spans -tracer_kind grpc_event
-
-  # private-gateway:
-  #   image: alextanhongpin/private-event-gateway:0.0.2
-  #   ports:
-  #     - 3000:8080
-  #   command: ./app -port :8080 -addr private-server:8080 -jwks_uri https://engineersmy.auth0.com/.well-known/jwks.json -auth0_iss https://engineersmy.auth0.com/ -auth0_aud api.grpc.events
-
-  # public-gateway:
-  #   image: alextanhongpin/public-event-gateway:0.0.2
-  #   ports:
-  #     - 3100:8080
-  #   command: ./app -port :8080 -addr public-server:8080
-
-  # webui:
-  #   image: alextanhongpin/go-grpc-event-webui:latest
-  #   ports:
-  #     - 8080
+  
