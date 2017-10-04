@@ -1,54 +1,50 @@
 VERSION=0.0.2
 
-public-server:
-	docker build -f pkg/server-public/Dockerfile -t alextanhongpin/public-event-server:0.0.1-beta .
-	docker push alextanhongpin/public-event-server:${VERSION}
+# Your dockerhub name
+ORGANIZATION=alextanhongpin
 
-private-server:
-	docker build -f pkg/server-private/Dockerfile -t alextanhongpin/private-event-server:0.0.1-beta .
-	docker push alextanhongpin/private-event-server:${VERSION}
+# Your docker image name
+SERVER_IMAGE=event-server
+GATEWAY_IMAGE=event-gateway
 
-public-gateway:
-	docker build -f pkg/gateway-public/Dockerfile -t alextanhongpin/public-event-gateway:0.0.1-beta .
-	docker push alextanhongpin/public-event-gateway:${VERSION}
+# The folder path where the files resides
+SERVER_PATH=pkg/server
+GATEWAY_PATH=pkg/gateway
 
-private-gateway:
-	docker build -f pkg/gateway-private/Dockerfile -t alextanhongpin/private-event-gateway:0.0.1-beta .
-	docker push alextanhongpin/private-event-gateway:${VERSION}
+# The constructed docker image with organization name
+SERVER_REPO=${ORGANIZATION}/${SERVER_IMAGE}
+GATEWAY_REPO=${ORGANIZATION}/${GATEWAY_IMAGE}
 
+# Docker multi-stage production build
+prod-server:
+	docker build -f ${SERVER_PATH}/Dockerfile -t ${SERVER_REPO}:${VERSION} .
+	docker tag ${SERVER_REPO}:${VERSION} ${SERVER_REPO}:latest
+	docker push ${SERVER_REPO}:${VERSION}
+	docker push ${SERVER_REPO}:latest
 
-push-all:
-	docker push alextanhongpin/public-event-server:${VERSION} && \
-	docker push alextanhongpin/private-event-server:${VERSION} && \
-	docker push alextanhongpin/public-event-gateway:${VERSION} && \
-	docker push alextanhongpin/private-event-gateway:${VERSION}
+prod-gateway:
+	docker build -f ${GATEWAY_PATH}/Dockerfile -t ${GATEWAY_REPO}:${VERSION} .
+	docker tag ${GATEWAY_REPO}:${VERSION} ${GATEWAY_REPO}:latest
+	docker push ${GATEWAY_REPO}:${VERSION}
+	docker push ${GATEWAY_REPO}:latest
 
-
-# Does a local build
-
-local-gateway:
-	@echo "building local gateway"
-	cd pkg/gateway-public/ && \
+# Local build
+dev-gateway:
+	@echo "Building development gateway"
+	cd ${GATEWAY_PATH} && \
 	CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o app && \
-	docker build -f Dockerfile.production -t alextanhongpin/public-event-gateway:${VERSION} . && \
-	rm -rf app
+	rm -rf app && \
+	docker build -f Dockerfile.dev -t ${GATEWAY_REPO}:${VERSION} . && \
+	docker tag ${GATEWAY_REPO}:${VERSION} ${GATEWAY_REPO}:latest && \
+	docker push ${GATEWAY_REPO}:${VERSION} && \
+	docker push ${GATEWAY_REPO}:latest
 
-	cd pkg/gateway-private/ && \
+dev-server:
+	@echo "Building development server"
+	cd ${SERVER_PATH} && \
 	CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o app && \
-	docker build -f Dockerfile.production -t alextanhongpin/private-event-gateway:${VERSION} . && \
-	rm -rf app
-
-local:
-	@echo "Building public event server"
-	cd pkg/server-public/ && \
-	CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o app && \
-	docker build -f Dockerfile.production -t alextanhongpin/public-event-server:${VERSION} . && \
-	rm -rf app
-	@echo "Done building public event server"
-
-	@echo "Building privte event server"
-	cd pkg/server-private/ && \
-	CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o app && \
-	docker build -f Dockerfile.production -t alextanhongpin/private-event-server:${VERSION} . && \
-	rm -rf app
-	@echo "Done building private server"
+	rm -rf app && \
+	docker build -f Dockerfile.dev -t ${SERVER_REPO}:${VERSION} . && \
+	docker tag ${SERVER_REPO}:${VERSION} ${SERVER_REPO}:latest && \
+	docker push ${SERVER_REPO}:${VERSION} && \
+	docker push ${SERVER_REPO}:latest

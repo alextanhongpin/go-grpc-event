@@ -28,7 +28,6 @@ func main() {
 		grpc_opentracing.WithTracer(trc),
 	}
 
-	// TODO: Setup database in `internals`` folder
 	db, err := database.New(database.Host(viper.GetString("mgo_host")))
 	if err != nil {
 		log.Fatalf("error connecting to db: %v\n", err)
