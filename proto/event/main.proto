@@ -2,6 +2,7 @@ syntax = "proto3";
 package event;
 
 import "google/api/annotations.proto";
+import public "proto/user/main.proto";
 
 service EventService {
   rpc GetEvents (GetEventsRequest) returns (GetEventsResponse) {
@@ -53,7 +54,7 @@ message Event {
   repeated string tags = 7;
   // @inject_tag: bson:"is_published"
   bool is_published = 8;
-  User user = 10;
+  grpc.user.User user = 10;
 }
 
 message GetEventsRequest {
@@ -104,12 +105,3 @@ message DeleteEventResponse {
   bool ok = 2;
 }
 
-message User {
-	string user_id = 1;
-  string email = 2;
-	string name = 3;
-	string picture = 4;
-	string nickname = 5;
-	string sub = 6;
-  bool is_anonymous = 7;
-}

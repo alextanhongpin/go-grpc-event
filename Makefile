@@ -31,6 +31,8 @@ stub:
 	--go_out=plugins=grpc:. \
 	--proto_path=. "{}" \;
 
+# -I${GOPATH}/src/github.com/alextanhongpin/go-grpc-event \
+
 # gw generates the grpc gateway file from the proto file
 gw:
 	find . -name "*.proto" -exec \

@@ -14,6 +14,7 @@ import (
 	"github.com/alextanhongpin/go-grpc-event/internal/database"
 	jaeger "github.com/alextanhongpin/go-grpc-event/internal/jaeger"
 	pb "github.com/alextanhongpin/go-grpc-event/proto/event"
+	pbUser "github.com/alextanhongpin/go-grpc-event/proto/user"
 )
 
 // Event represents the event payload with additional fields to shadow the proto-generate struct
@@ -122,7 +123,15 @@ func (s eventServer) CreateEvent(ctx context.Context, msg *pb.CreateEventRequest
 	msg.Data.IsPublished = usr.IsAdmin() // Events created by admin defaults to true
 
 	if usr.IsAdmin() {
-		msg.Data.User = &pb.User{
+		// newUsr := pb.GetUser()
+
+		// newUsr.UserId = usr.Sub
+		// newUsr.Email = usr.Email
+		// newUsr.Name = usr.Name
+		// newUsr.Picture = usr.Picture
+		// newUsr.Nickname = usr.Nickname
+		// newUsr.Sub = usr.Sub
+		msg.Data.User = &pbUser.User{
 			UserId:   usr.Sub,
 			Email:    usr.Email,
 			Name:     usr.Name,

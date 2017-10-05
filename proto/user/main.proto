@@ -1,0 +1,13 @@
+syntax = "proto3";
+package grpc.user;
+option go_package = "github.com/alextanhongpin/go-grpc-event/proto/user;user";
+
+message User {
+	string user_id = 1;
+  string email = 2;
+	string name = 3;
+	string picture = 4;
+	string nickname = 5;
+	string sub = 6;
+  bool is_anonymous = 7;
+}
