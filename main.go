@@ -27,5 +27,4 @@ func main() {
 
 	log.Println(viper.Get("name"))
 	log.Printf("%#v", viper.GetStringSlice("languages"))
-
 }

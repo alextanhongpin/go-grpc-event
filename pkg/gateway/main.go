@@ -125,12 +125,15 @@ func AuthClientInterceptor() grpc.UnaryClientInterceptor {
 			}
 			span.LogKV("guest", "true")
 			span.LogEvent("fetch_user")
-			md, err := fetchUserDetails(span.Context(), authHeader[0])
+			newMD, err := fetchUserDetails(span, authHeader[0])
+
 			if err != nil {
 				span.SetTag("error", fmt.Sprintf("Unable to fetch user details: %#v", err.Error()))
 				return err
 			}
-			ctx = metadata.NewIncomingContext(ctx, md)
+			// This hack allows us to send the metadata, at the same time connect the spans between the server and gateway
+			ctx = metadata.NewOutgoingContext(ctx, metadata.Join(newMD, md))
+
 		} else {
 			span.LogKV("guest", "false")
 		}
@@ -138,9 +141,9 @@ func AuthClientInterceptor() grpc.UnaryClientInterceptor {
 	}
 }
 
-func fetchUserDetails(parentCtx opentracing.SpanContext, auth string) (metadata.MD, error) {
+func fetchUserDetails(parentSpan opentracing.Span, auth string) (metadata.MD, error) {
 	var md metadata.MD
-	span := opentracing.StartSpan("userinfo", opentracing.ChildOf(parentCtx))
+	span := opentracing.StartSpan("userinfo", opentracing.ChildOf(parentSpan.Context()))
 	defer span.Finish()
 
 	// Start a new span
@@ -180,6 +183,5 @@ func fetchUserDetails(parentCtx opentracing.SpanContext, auth string) (metadata.
 			}
 		}
 	}
-	md = metadata.New(userinfo)
-	return md, nil
+	return metadata.New(userinfo), nil
 }

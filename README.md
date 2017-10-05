@@ -274,4 +274,12 @@ $ git submodule update --init --recursive
 $ make install
 ```
 
+
 And then delete the vendored opentracing library from the jaeger vendor folder.
+
+### Securing mongodb
+
+```bash
+$ mongo admin
+$ db.auth("admin", "password")
+```

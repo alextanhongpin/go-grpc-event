@@ -1,12 +1,18 @@
 version: "3"
 services:
   mongo: 
-    image: mongo:latest
+    image: mongo:3.4.9
+    env_file: .env
     ports:
       - 27017:27017
     volumes:
       - ./data/db:/data/db
-  
+      - ./mongo/:/docker-entrypoint-initdb.d/
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
+      - MONGO_INITDB_DATABASE=${MONGO_INITDB_ROOT_PASSWORD}
+
   metabase:
     image: metabase/metabase
     ports:

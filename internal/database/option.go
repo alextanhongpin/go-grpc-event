@@ -2,8 +2,10 @@ package database
 
 // Options represents the available options for the database
 type Options struct {
-	host string
-	name string
+	host     string
+	db       string
+	username string
+	password string
 }
 
 // Option is a function that returns a new option
@@ -17,8 +19,22 @@ func Host(host string) Option {
 }
 
 // Name is the database name
-func Name(name string) Option {
+func Name(db string) Option {
 	return func(o *Options) {
-		o.name = name
+		o.db = db
+	}
+}
+
+// Username is the database name
+func Username(username string) Option {
+	return func(o *Options) {
+		o.username = username
+	}
+}
+
+// Password is the database name
+func Password(password string) Option {
+	return func(o *Options) {
+		o.password = password
 	}
 }
