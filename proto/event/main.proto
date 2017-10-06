@@ -2,7 +2,7 @@ syntax = "proto3";
 package event;
 
 import "google/api/annotations.proto";
-import public "proto/user/main.proto";
+import "proto/user/main.proto";
 
 service EventService {
   rpc GetEvents (GetEventsRequest) returns (GetEventsResponse) {

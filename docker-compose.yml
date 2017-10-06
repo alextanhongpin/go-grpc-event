@@ -13,19 +13,19 @@ services:
       - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
       - MONGO_INITDB_DATABASE=${MONGO_INITDB_ROOT_PASSWORD}
 
-  metabase:
-    image: metabase/metabase
-    ports:
-      - 3000
-    volumes:
-      - ./metabase-data:/metabase-data
-    environment:
-      - MD_DB_FILE=/metabase-data/metabase.db
+  # metabase:
+  #   image: metabase/metabase
+  #   ports:
+  #     - 3000
+  #   volumes:
+  #     - ./metabase-data:/metabase-data
+  #   environment:
+  #     - MD_DB_FILE=/metabase-data/metabase.db
 
-  openzipkin:
-    image: openzipkin/zipkin
-    ports:
-      - 9411:9411
+  # openzipkin:
+  #   image: openzipkin/zipkin
+  #   ports:
+  #     - 9411:9411
 
   jaeger:
     image: jaegertracing/all-in-one:latest

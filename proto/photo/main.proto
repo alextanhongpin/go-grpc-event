@@ -1,49 +1,103 @@
 syntax = "proto3";
 
-// package photo;
+package photo;
 
-// import "google/api/annotations.proto";
+import "google/api/annotations.proto";
+import "proto/user/main.proto";
 
-// service PhotoService {
-//   rpc GetPhotos (GetPhotosRequest) returns (GetPhotosResponse) {
-//     option (google.api.http) = {
-//       get: "/v1/photos"
-//     };
-//   }
-//   rpc GetPhoto (GetPhotoRequest) returns (GetPhotoResponse) {
-//     option (google.api.http) = {
-//       get: "/v1/photos/{id}"
-//     };
-//   }
-// }
+service PhotoService {
+  rpc GetPhotos (GetPhotosRequest) returns (GetPhotosResponse) {
+    option (google.api.http) = {
+      get: "/v1/photos"
+    };
+  }
+  rpc GetPhoto (GetPhotoRequest) returns (GetPhotoResponse) {
+    option (google.api.http) = {
+      get: "/v1/photos/{id}"
+    };
+  }
+  rpc CreatePhoto (CreatePhotoRequest) returns (CreatePhotoResponse) {
+    option (google.api.http) = {
+      post: "/v1/photos",
+      body: "*"
+    };
+  }
 
-// message Photo {
-//   string id = 1;
-//   int64 created_at = 2;
-//   int64 updated_at = 3;
-//   string name = 4;
-//   string src = 5;
-//   string caption = 6;
-//   bool is_published = 7;
-//   string user_id = 8;
-//   bool is_anonymous = 9;
-//   User user = 10;
-// }
+  rpc UpdatePhoto (UpdatePhotoRequest) returns (UpdatePhotoResponse) {
+    option (google.api.http) = {
+      patch: "/v1/photos/{data.id}",
+      body: "*"
+    };
+  }
 
-// message User {
-//   string name = 1;
-// }
+  rpc DeletePhoto (DeletePhotoRequest) returns (DeletePhotoResponse) {
+    option (google.api.http) = {
+      delete: "/v1/photos/{id}"
+    };
+  }
+}
 
-// // https://engineersmy.auth0.com/userinfo
-// // {
-// //   "email_verified": false,
-// //   "email": "test.account@userinfo.com",
-// //   "clientID": "q2hnj2iu...",
-// //   "updated_at": "2016-12-05T15:15:40.545Z",
-// //   "name": "test.account@userinfo.com",
-// //   "picture": "https://s.gravatar.com/avatar/dummy.png",
-// //   "user_id": "auth0|58454...",
-// //   "nickname": "test.account",
-// //   "created_at": "2016-12-05T11:16:59.640Z",
-// //   "sub": "auth0|58454..."
-// // }
+message Photo {
+  string id = 1;
+  // @inject_tag: bson:"created_at"
+  int64 created_at = 2;
+  // @inject_tag: bson:"updated_at"
+  int64 updated_at = 3;
+  string name = 4;
+  string src = 5;
+  string caption = 6;
+  // @inject_tag: bson:"is_published"
+  bool is_published = 7;
+  // @inject_tag: bson:"is_anonymous"
+  bool is_anonymous = 8;
+  grpc.user.User user = 10;
+}
+
+message GetPhotosRequest {
+  string query = 1;
+  int64 page = 2;
+  // @inject_tag: bson:"per_page"
+  int64 per_page = 3;
+}
+
+message GetPhotosResponse {
+  repeated Photo data = 1;
+  // @inject_tag: bson:"total_count"
+  int64 total_count = 2;
+  string next = 3;
+  string last = 4;
+  string first = 5;
+  string prev = 6;
+}
+
+message GetPhotoRequest {
+  string id = 1;
+}
+
+message GetPhotoResponse {
+  Photo data = 1;
+}
+
+message CreatePhotoRequest {
+  Photo data = 1;
+}
+
+message CreatePhotoResponse {
+  string id = 1;
+}
+
+message UpdatePhotoRequest {
+  Photo data = 1;
+}
+
+message UpdatePhotoResponse {
+  bool ok = 1;
+}
+
+message DeletePhotoRequest {
+  string id = 1;
+}
+
+message DeletePhotoResponse {
+  bool ok = 1;
+}

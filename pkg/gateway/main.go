@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strings"
 
+	"google.golang.org/grpc/codes"
+
 	"github.com/golang/glog"
 	"github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
@@ -121,7 +123,7 @@ func AuthClientInterceptor() grpc.UnaryClientInterceptor {
 
 			if _, err := auth0Validator.Validate(r); err != nil {
 				span.SetTag("error", err.Error())
-				return err
+				return grpc.Errorf(codes.Unauthenticated, "User is unauthorized")
 			}
 			span.LogKV("guest", "true")
 			span.LogEvent("fetch_user")

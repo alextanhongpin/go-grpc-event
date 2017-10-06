@@ -123,14 +123,6 @@ func (s eventServer) CreateEvent(ctx context.Context, msg *pb.CreateEventRequest
 	msg.Data.IsPublished = usr.IsAdmin() // Events created by admin defaults to true
 
 	if usr.IsAdmin() {
-		// newUsr := pb.GetUser()
-
-		// newUsr.UserId = usr.Sub
-		// newUsr.Email = usr.Email
-		// newUsr.Name = usr.Name
-		// newUsr.Picture = usr.Picture
-		// newUsr.Nickname = usr.Nickname
-		// newUsr.Sub = usr.Sub
 		msg.Data.User = &pbUser.User{
 			UserId:   usr.Sub,
 			Email:    usr.Email,
@@ -162,6 +154,7 @@ func (s eventServer) CreateEvent(ctx context.Context, msg *pb.CreateEventRequest
 func (s eventServer) UpdateEvent(ctx context.Context, msg *pb.UpdateEventRequest) (*pb.UpdateEventResponse, error) {
 	span := jaeger.NewSpanFromContext(ctx, "update_event")
 	defer span.Finish()
+
 	span.LogEvent("get_metadata")
 	var usr UserInfo
 	usr.Extract(ctx)
@@ -170,11 +163,13 @@ func (s eventServer) UpdateEvent(ctx context.Context, msg *pb.UpdateEventRequest
 		span.SetTag("error", "User is not authorized to perform this action")
 		return nil, grpc.Errorf(codes.Unauthenticated, "User is not authorized to perform this action")
 	}
+
 	span.LogEvent("validate_id")
 	if !bson.IsObjectIdHex(msg.Data.Id) {
 		span.SetTag("error", "Event does not exist or has been deleted")
 		return nil, grpc.Errorf(codes.FailedPrecondition, "Event does not exist or has been deleted")
 	}
+
 	span.LogEvent("create_session")
 	sess := s.db.Copy()
 	defer sess.Close()
@@ -206,6 +201,7 @@ func (s eventServer) UpdateEvent(ctx context.Context, msg *pb.UpdateEventRequest
 			}
 		}
 	}
+
 	span.LogEvent("update")
 	if err := c.UpdateId(bson.ObjectIdHex(msg.Data.Id), bson.M{
 		"$set": m,
