@@ -3,29 +3,33 @@ package main
 import (
 	"context"
 
-	photopb "github.com/alextanhongpin/proto/photo"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+
+	"github.com/alextanhongpin/go-grpc-event/internal/database"
+	pb "github.com/alextanhongpin/go-grpc-event/proto/photo"
 )
 
-type photoServer struct{}
+type photoServer struct {
+	db *database.DB
+}
 
-func (s photoServer) GetPhotos(ctx context.Context, msg *photopb.GetPhotosRequest) (*photopb.GetPhotosResponse, error) {
+func (s photoServer) GetPhotos(ctx context.Context, msg *pb.GetPhotosRequest) (*pb.GetPhotosResponse, error) {
 	return nil, grpc.Errorf(codes.Unimplemented, "Not implemented")
 }
 
-func (s photoServer) GetPhoto(ctx context.Context, msg *photopb.GetPhotoRequest) (*photopb.GetPhotoResponse, error) {
+func (s photoServer) GetPhoto(ctx context.Context, msg *pb.GetPhotoRequest) (*pb.GetPhotoResponse, error) {
 	return nil, grpc.Errorf(codes.Unimplemented, "Not implemented")
 }
 
-func (s photoServer) UpdatePhoto(ctx context.Context, msg *photopb.UpdatePhotoRequest) (*photopb.UpdatePhotoResponse, error) {
+func (s photoServer) UpdatePhoto(ctx context.Context, msg *pb.UpdatePhotoRequest) (*pb.UpdatePhotoResponse, error) {
 	return nil, grpc.Errorf(codes.Unimplemented, "Not implemented")
 }
 
-func (s photoServer) DeletePhoto(ctx context.Context, msg *photopb.DeletePhotoRequest) (*photopb.DeletePhotoResponse, error) {
+func (s photoServer) DeletePhoto(ctx context.Context, msg *pb.DeletePhotoRequest) (*pb.DeletePhotoResponse, error) {
 	return nil, grpc.Errorf(codes.Unimplemented, "Not implemented")
 }
 
-func (s photoServer) CreatePhoto(ctx context.Context, msg *photopb.CreatePhotoRequest) (*photopb.CreatePhotoResponse, error) {
+func (s photoServer) CreatePhoto(ctx context.Context, msg *pb.CreatePhotoRequest) (*pb.CreatePhotoResponse, error) {
 	return nil, grpc.Errorf(codes.Unimplemented, "Not implemented")
 }

@@ -24,7 +24,7 @@ type Event struct {
 }
 
 type eventServer struct {
-	db  *database.Database
+	db  *database.DB
 	trc opentracing.Tracer
 }
 

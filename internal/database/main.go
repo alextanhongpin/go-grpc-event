@@ -8,12 +8,13 @@ import (
 )
 
 // New returns a new database
-func New(opts ...Option) (*Database, error) {
+func New(opts ...Option) (*DB, error) {
 	options := Options{
 		host:     "localhost",
 		db:       "engineersmy",
 		username: "",
 		password: "",
+		timeout:  60 * time.Second,
 	}
 	for _, o := range opts {
 		o(&options)
@@ -22,7 +23,7 @@ func New(opts ...Option) (*Database, error) {
 	log.Println("connecting to db")
 	sess, err := mgo.DialWithInfo(&mgo.DialInfo{
 		Addrs:    []string{options.host}, // options.host},
-		Timeout:  10 * time.Second,
+		Timeout:  options.timeout,
 		Database: options.db,
 		Username: options.username,
 		Password: options.password,
@@ -33,7 +34,7 @@ func New(opts ...Option) (*Database, error) {
 	}
 	log.Println("connected to db")
 
-	return &Database{
+	return &DB{
 		Ref:  sess,
 		Name: options.db,
 	}, nil

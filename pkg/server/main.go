@@ -16,11 +16,17 @@ import (
 )
 
 func main() {
+	//
+	// TCP
+	//
 	lis, err := net.Listen("tcp", viper.GetString("port"))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
+	//
+	// TRACER
+	//
 	trc, closer := jaeger.New(viper.GetString("tracer"))
 	defer closer.Close()
 
@@ -28,6 +34,9 @@ func main() {
 		grpc_opentracing.WithTracer(trc),
 	}
 
+	//
+	// DATABASE
+	//
 	db, err := database.New(
 		database.Host(viper.GetString("mgo_host")),
 		database.Name(viper.GetString("mgo_db")),
@@ -48,6 +57,9 @@ func main() {
 		log.Printf("error creating index: %v\n", err)
 	}
 
+	//
+	// GRPC
+	//
 	grpcServer := grpc.NewServer(
 		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
 			grpc_opentracing.StreamServerInterceptor(tracerOpts...),
