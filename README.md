@@ -283,3 +283,9 @@ And then delete the vendored opentracing library from the jaeger vendor folder.
 $ mongo admin
 $ db.auth("admin", "password")
 ```
+
+### Add GPG keys
+
+```bash
+$ git commit -S -am "eat: add gpg key"
+```
