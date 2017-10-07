@@ -22,7 +22,8 @@ import (
 	"github.com/alextanhongpin/go-grpc-event/internal/auth0"
 	"github.com/alextanhongpin/go-grpc-event/internal/cors"
 	jaeger "github.com/alextanhongpin/go-grpc-event/internal/jaeger"
-	gw "github.com/alextanhongpin/go-grpc-event/proto/event"
+	eventgw "github.com/alextanhongpin/go-grpc-event/proto/event"
+	photogw "github.com/alextanhongpin/go-grpc-event/proto/photo"
 )
 
 // Response represents the payload that is returned on error
@@ -37,7 +38,8 @@ var whitelist []string
 
 func run() error {
 	var (
-		addr              = flag.String("addr", "localhost:8081", "Address of the private event GRPC service")
+		eventAddr         = flag.String("event-addr", "localhost:8081", "Address of the private event GRPC service")
+		photoAddr         = flag.String("photo-addr", "localhost:8081", "Address of the private event GRPC service")
 		port              = flag.String("port", ":9081", "TCP address to listen on")
 		jwksURI           = flag.String("jwks_uri", "", "Auth0 jwks uri available at auth0 dashboard")
 		auth0APIIssuer    = flag.String("auth0_iss", "", "Auth0 api issuer available at auth0 dashboard")
@@ -79,7 +81,11 @@ func run() error {
 		&runtime.JSONPb{EnumsAsInts: true, OrigName: true, EmitDefaults: false}),
 	)
 
-	if err := gw.RegisterEventServiceHandlerFromEndpoint(ctx, mux, *addr, opts); err != nil {
+	if err := eventgw.RegisterEventServiceHandlerFromEndpoint(ctx, mux, *eventAddr, opts); err != nil {
+		return err
+	}
+
+	if err := photogw.RegisterPhotoServiceHandlerFromEndpoint(ctx, mux, *photoAddr, opts); err != nil {
 		return err
 	}
 
@@ -90,7 +96,8 @@ func run() error {
 		auth0.Issuer(*auth0APIIssuer),
 	)
 
-	log.Printf("grpc_server = %s\n", *addr)
+	log.Printf("event_service = %s\n", *eventAddr)
+	log.Printf("photo_service = %s\n", *photoAddr)
 	log.Printf("listening to port *%s. press ctrl + c to cancel.\n", *port)
 	return http.ListenAndServe(*port, cors.New(mux))
 }
