@@ -14,7 +14,7 @@ func New(opts ...Option) (*DB, error) {
 		db:       "engineersmy",
 		username: "",
 		password: "",
-		timeout:  60 * time.Second,
+		timeout:  60,
 	}
 	for _, o := range opts {
 		o(&options)
@@ -23,7 +23,7 @@ func New(opts ...Option) (*DB, error) {
 	log.Println("connecting to db")
 	sess, err := mgo.DialWithInfo(&mgo.DialInfo{
 		Addrs:    []string{options.host}, // options.host},
-		Timeout:  options.timeout,
+		Timeout:  time.Duration(options.timeout) * time.Second,
 		Database: options.db,
 		Username: options.username,
 		Password: options.password,

@@ -13,5 +13,6 @@ gateway:
 	-auth0_iss=${ISSUER} \
 	-auth0_aud=${AUDIENCE} \
 	-whitelisted_emails=${WHITELISTED_EMAILS}
+
 photo:
-	@echo ${MONGO_HOST}
+	PORT=${PHOTO_PORT} MGO_HOST=${MONGO_HOST} MGO_USR=${MONGO_USER} MGO_PWD=${MONGO_PASS} go run pkg/photo-service/*.go

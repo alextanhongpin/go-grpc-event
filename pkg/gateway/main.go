@@ -22,8 +22,8 @@ import (
 	"github.com/alextanhongpin/go-grpc-event/internal/auth0"
 	"github.com/alextanhongpin/go-grpc-event/internal/cors"
 	jaeger "github.com/alextanhongpin/go-grpc-event/internal/jaeger"
-	eventgw "github.com/alextanhongpin/go-grpc-event/proto/event"
-	photogw "github.com/alextanhongpin/go-grpc-event/proto/photo"
+	egw "github.com/alextanhongpin/go-grpc-event/proto/event"
+	pgw "github.com/alextanhongpin/go-grpc-event/proto/photo"
 )
 
 // Response represents the payload that is returned on error
@@ -81,11 +81,13 @@ func run() error {
 		&runtime.JSONPb{EnumsAsInts: true, OrigName: true, EmitDefaults: false}),
 	)
 
-	if err := eventgw.RegisterEventServiceHandlerFromEndpoint(ctx, mux, *eventAddr, opts); err != nil {
+	// Register the event gateway
+	if err := egw.RegisterEventServiceHandlerFromEndpoint(ctx, mux, *eventAddr, opts); err != nil {
 		return err
 	}
 
-	if err := photogw.RegisterPhotoServiceHandlerFromEndpoint(ctx, mux, *photoAddr, opts); err != nil {
+	// Register the photo gateway
+	if err := pgw.RegisterPhotoServiceHandlerFromEndpoint(ctx, mux, *photoAddr, opts); err != nil {
 		return err
 	}
 

@@ -1,14 +1,12 @@
 package database
 
-import "time"
-
 // Options represents the available options for the database
 type Options struct {
 	host     string
 	db       string
 	username string
 	password string
-	timeout  time.Second
+	timeout  int
 }
 
 // Option is a function that returns a new option
@@ -45,6 +43,6 @@ func Password(password string) Option {
 // TimeoutInSeconds is the time taken for mongodb to connect before it fails
 func TimeoutInSeconds(timeout int) Option {
 	return func(o *Options) {
-		o.Timeout = timeout * time.Second
+		o.timeout = timeout
 	}
 }

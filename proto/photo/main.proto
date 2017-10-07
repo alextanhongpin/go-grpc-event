@@ -4,6 +4,7 @@ package photo;
 
 import "google/api/annotations.proto";
 import "proto/user/main.proto";
+// import "google/protobuf/empty.proto";
 
 service PhotoService {
   rpc GetPhotos (GetPhotosRequest) returns (GetPhotosResponse) {
@@ -79,7 +80,7 @@ message GetPhotoResponse {
 }
 
 message CreatePhotoRequest {
-  Photo data = 1;
+  repeated Photo data = 1;
 }
 
 message CreatePhotoResponse {
