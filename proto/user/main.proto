@@ -1,13 +1,17 @@
 syntax = "proto3";
 package grpc.user;
-option go_package = "github.com/alextanhongpin/go-grpc-event/proto/user;user";
+
+// option go_package = "github.com/alextanhongpin/go-grpc-event/proto/user;user";
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 
 message User {
-	string user_id = 1;
+	string id = 1;
   string email = 2;
 	string name = 3;
 	string picture = 4;
 	string nickname = 5;
 	string sub = 6;
+  // @inject_tag: bson:"is_anonymous"
   bool is_anonymous = 7;
 }
+
