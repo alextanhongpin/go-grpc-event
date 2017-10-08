@@ -1,10 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/asaskevich/govalidator"
 	"github.com/opentracing/opentracing-go"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -16,12 +18,6 @@ import (
 	pb "github.com/alextanhongpin/go-grpc-event/proto/event"
 	pbUser "github.com/alextanhongpin/go-grpc-event/proto/user"
 )
-
-// Event represents the event payload with additional fields to shadow the proto-generate struct
-type Event struct {
-	ID       bson.ObjectId `bson:"_id,omitempty"`
-	pb.Event `bson:",inline"`
-}
 
 type eventServer struct {
 	db  *database.DB
@@ -37,35 +33,23 @@ func (s eventServer) GetEvents(ctx context.Context, msg *pb.GetEventsRequest) (*
 	defer sess.Close()
 	c := s.db.Collection(sess, "events")
 
-	var tmpEvents []Event
-
 	query := bson.M{}
 	if msg.Filter != "" && strings.Contains(msg.Filter, "published") {
 		query["is_published"] = !strings.Contains(msg.Filter, "-")
 	}
 
 	span.LogEvent("query")
-	if err := c.Find(query).All(&tmpEvents); err != nil {
+	var events []*pb.Event
+	if err := c.Find(query).All(&events); err != nil {
 		msg := fmt.Sprintf("Error performing query: %s", err.Error())
 		span.SetTag("error", msg)
 		return nil, err
 	}
 
 	span.LogEvent("parse")
-	var events []*pb.Event
-	for _, event := range tmpEvents {
-		// Convert the objectId to string id
-		event.Id = event.ID.Hex()
-		cvt := pb.Event(event.Event)
 
-		// Delete the user sub
-		if cvt.User != nil {
-			// if cvt.User.isAnonymous, remove all users object
-			cvt.User.UserId = ""
-			cvt.User.Sub = ""
-		}
-
-		events = append(events, &cvt)
+	for _, event := range events {
+		event.Id = event.Mgoid.Hex()
 	}
 	return &pb.GetEventsResponse{
 		Data:  events,
@@ -87,18 +71,15 @@ func (s eventServer) GetEvent(ctx context.Context, msg *pb.GetEventRequest) (*pb
 	defer sess.Close()
 	c := s.db.Collection(sess, "events")
 
-	var tmpEvt Event
+	var event *pb.Event
 	span.LogEvent("query")
-	if err := c.FindId(bson.ObjectIdHex(msg.Id)).One(&tmpEvt); err != nil {
+	if err := c.FindId(bson.ObjectIdHex(msg.Id)).One(&event); err != nil {
 		span.SetTag("error", err.Error())
 		return nil, err
 	}
-	span.LogEvent("parse")
-	tmpEvt.Id = tmpEvt.ID.Hex()
-	evt := &pb.GetEventResponse{
-		Data: &tmpEvt.Event,
-	}
-	return evt, nil
+	return &pb.GetEventResponse{
+		Data: event,
+	}, nil
 }
 
 func (s eventServer) CreateEvent(ctx context.Context, msg *pb.CreateEventRequest) (*pb.CreateEventResponse, error) {
@@ -118,13 +99,15 @@ func (s eventServer) CreateEvent(ctx context.Context, msg *pb.CreateEventRequest
 	// Create a new id, because we want to return it after creating
 	id := bson.NewObjectId()
 
-	msg.Data.CreatedAt = time.Now().UnixNano() / 1000000
-	msg.Data.UpdatedAt = time.Now().UnixNano() / 1000000
+	msg.Data.CreatedAt = time.Now().UTC().Format(time.RFC3339)
+	msg.Data.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	msg.Data.IsPublished = usr.IsAdmin() // Events created by admin defaults to true
+	msg.Data.Mgoid = id
+	msg.Data.Id = id.Hex()
 
-	if usr.IsAdmin() {
+	if usr.IsAuthorized() {
 		msg.Data.User = &pbUser.User{
-			UserId:   usr.Sub,
+			Id:       usr.Sub,
 			Email:    usr.Email,
 			Name:     usr.Name,
 			Picture:  usr.Picture,
@@ -132,13 +115,17 @@ func (s eventServer) CreateEvent(ctx context.Context, msg *pb.CreateEventRequest
 			Sub:      usr.Sub,
 		}
 	}
-	evt := Event{
-		id,
-		*msg.Data,
+
+	// Carry out validation
+	span.LogEvent("validate_struct")
+	ok, err := govalidator.ValidateStruct(msg.Data)
+	if err != nil || !ok {
+		span.SetTag("error", err.Error())
+		return nil, err
 	}
 
 	span.LogEvent("insert")
-	if err := c.Insert(evt); err != nil {
+	if err := c.Insert(msg.Data); err != nil {
 		msg := fmt.Sprintf("Error inserting data: %s", err.Error())
 		span.SetTag("error", msg)
 		return nil, err
@@ -146,7 +133,6 @@ func (s eventServer) CreateEvent(ctx context.Context, msg *pb.CreateEventRequest
 
 	span.LogKV("event_id", id.Hex())
 	return &pb.CreateEventResponse{
-		Ok: true,
 		Id: id.Hex(),
 	}, nil
 }
@@ -176,35 +162,18 @@ func (s eventServer) UpdateEvent(ctx context.Context, msg *pb.UpdateEventRequest
 	c := s.db.Collection(sess, "events")
 
 	// Perform partial update
-	m := bson.M{
-		"name":         msg.Data.Name,
-		"uri":          msg.Data.Uri,
-		"start_date":   msg.Data.StartDate,
-		"updated_at":   time.Now().UnixNano() / 1000000,
-		"is_published": msg.Data.IsPublished,
-	}
 
-	if len(msg.Data.Tags) != 0 {
-		m["tags"] = msg.Data.Tags
+	msg.Data.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	var i map[string]interface{}
+	o, err := json.Marshal(msg.Data)
+	if err != nil {
+		return nil, err
 	}
-
-	// Remove unused fields
-	for k, v := range m {
-		switch i := v.(type) {
-		case int:
-			if i == 0 {
-				delete(m, k)
-			}
-		case string:
-			if i == "" {
-				delete(m, k)
-			}
-		}
-	}
+	json.Unmarshal(o, &i)
 
 	span.LogEvent("update")
 	if err := c.UpdateId(bson.ObjectIdHex(msg.Data.Id), bson.M{
-		"$set": m,
+		"$set": i,
 	}); err != nil {
 		msg := fmt.Sprintf("Error updating db: %s", err.Error())
 		span.SetTag("error", msg)

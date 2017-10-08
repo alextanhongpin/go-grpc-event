@@ -20,6 +20,7 @@ setup:
 	go get -u -v github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger
 	go get -u -v github.com/golang/protobuf/protoc-gen-go
 	go get -u -v github.com/favadi/protoc-go-inject-tag
+	go get github.com/gogo/protobuf/protoc-gen-gofast
 
 
 # stub generates the grpc server file from the proto file
@@ -28,7 +29,7 @@ stub:
 	protoc -I/usr/local/include -I. \
 	-I${GOPATH}/src \
 	-I${GOPATH}/src/github.com/grpc-ecosystem/grpc-gateway/third_party/googleapis \
-	--go_out=plugins=grpc:. \
+	--gofast_out=plugins=grpc:. \
 	--proto_path=. "{}" \;
 
 # -I${GOPATH}/src/github.com/alextanhongpin/go-grpc-event \

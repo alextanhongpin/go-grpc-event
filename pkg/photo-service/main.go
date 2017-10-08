@@ -4,11 +4,13 @@ import (
 	"log"
 	"net"
 
+	"github.com/grpc-ecosystem/go-grpc-middleware"
+	"github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
 	"github.com/spf13/viper"
-
 	"google.golang.org/grpc"
 
 	"github.com/alextanhongpin/go-grpc-event/internal/database"
+	jaeger "github.com/alextanhongpin/go-grpc-event/internal/jaeger"
 	pb "github.com/alextanhongpin/go-grpc-event/proto/photo"
 )
 
@@ -19,6 +21,16 @@ func main() {
 	lis, err := net.Listen("tcp", viper.GetString("port"))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
+	}
+
+	//
+	// TRACER
+	//
+	trc, closer := jaeger.New(viper.GetString("tracer"))
+	defer closer.Close()
+
+	tracerOpts := []grpc_opentracing.Option{
+		grpc_opentracing.WithTracer(trc),
 	}
 
 	//
@@ -38,7 +50,14 @@ func main() {
 	//
 	// GRPC
 	//
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(
+		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
+			grpc_opentracing.StreamServerInterceptor(tracerOpts...),
+		)),
+		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
+			grpc_opentracing.UnaryServerInterceptor(tracerOpts...),
+		)),
+	)
 	pb.RegisterPhotoServiceServer(grpcServer, &photoServer{
 		db: db,
 	})

@@ -2,7 +2,8 @@ syntax = "proto3";
 package event;
 
 import "google/api/annotations.proto";
-import "proto/user/main.proto";
+import "github.com/alextanhongpin/go-grpc-event/proto/user/main.proto";
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 
 service EventService {
   rpc GetEvents (GetEventsRequest) returns (GetEventsResponse) {
@@ -40,27 +41,21 @@ service EventService {
 
 message Event {
   string id = 1;
-  // @inject_tag: bson:"created_at"
-  int64 created_at = 2;
-  // @inject_tag: bson:"updated_at"
-  int64 updated_at = 3;
-  // @inject_tag: bson:"start_date"
-  int64 start_date = 4;
-  // @inject_tag: bson:"name"
-  string name = 5;
-  // @inject_tag: bson:"uri"
-  string uri = 6;
-  // @inject_tag: bson:"tags"
+  string created_at = 2 [(gogoproto.moretags) = "bson:\"created_at\" valid:\"rfc3339\""];
+  string updated_at = 3 [(gogoproto.moretags) = "bson:\"updated_at\" valid:\"rfc3339\""];
+  string start_date = 4 [(gogoproto.moretags) = "bson:\"start_date\" valid:\"rfc3339\""];
+  string name = 5 [(gogoproto.moretags) = "bson:\"name\" valid:\"required~Name is required\""];
+  string uri = 6 [(gogoproto.moretags) = "bson:\"uri\" valid:\"url,required~Url is required\""];
   repeated string tags = 7;
-  // @inject_tag: bson:"is_published"
-  bool is_published = 8;
+  bool is_published = 8 [(gogoproto.moretags) = "bson:\"is_published\""];
   grpc.user.User user = 10;
+  
+  string mgoid = 100 [(gogoproto.nullable) = false, (gogoproto.customtype) = "gopkg.in/mgo.v2/bson.ObjectId", (gogoproto.moretags) = "bson:\"_id,omitempty\"", (gogoproto.jsontag) = "-"];
 }
 
 message GetEventsRequest {
   string query = 1;
   string filter = 2;
-  // bool is_published = 2;
 }
 
 message GetEventsResponse {
@@ -82,9 +77,7 @@ message CreateEventRequest {
 }
 
 message CreateEventResponse {
-  string error = 1;
-  bool ok = 2;
-  string id = 3;
+  string id = 1;
 }
 
 message UpdateEventRequest {
