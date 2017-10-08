@@ -3,9 +3,9 @@ FROM alpine:latest
 MAINTAINER Alex Hong Pin Tan <alextan220990@gmail.com>
 
 LABEL version="1.0.0"
-LABEL description="A grpc-gateway connecting to multiple servers"
+LABEL description="A grpc-server server serving photo"
 LABEL language="golang:1.9"
-LABEL keywords="go, grpc, grpc-gateway"
+LABEL keywords="go, grpc, grpc-server, photo"
 
 RUN apk --no-cache add ca-certificates
 

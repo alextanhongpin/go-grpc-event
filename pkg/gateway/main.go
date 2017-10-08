@@ -3,11 +3,11 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
+
+	"github.com/spf13/viper"
 
 	"google.golang.org/grpc/codes"
 
@@ -31,33 +31,8 @@ type Response struct {
 	Message string `json:"message"`
 }
 
-var auth0Validator *auth0.Auth0
-var whitelist []string
-
-// var tracer opentracing.Tracer
-
 func run() error {
-	var (
-		eventAddr         = flag.String("event-addr", "localhost:8081", "Address of the private event GRPC service")
-		photoAddr         = flag.String("photo-addr", "localhost:8081", "Address of the private event GRPC service")
-		port              = flag.String("port", ":9081", "TCP address to listen on")
-		jwksURI           = flag.String("jwks_uri", "", "Auth0 jwks uri available at auth0 dashboard")
-		auth0APIIssuer    = flag.String("auth0_iss", "", "Auth0 api issuer available at auth0 dashboard")
-		auth0APIAudience  = flag.String("auth0_aud", "", "Auth0 api audience available at auth0 dashboard")
-		whitelistedEmails = flag.String("whitelisted_emails", "", "A list of admin emails that are whitelisted")
-		tracerKind        = flag.String("tracker_kind", "gateway", "Namespace for the opentracing")
-		// https://engineersmy.auth0.com/userinfo
-	)
-	flag.Parse()
-
-	if *whitelistedEmails != "" {
-		tmp := strings.Split(*whitelistedEmails, ",")
-		for _, v := range tmp {
-			whitelist = append(whitelist, strings.TrimSpace(v))
-		}
-	}
-
-	trc, closer := jaeger.New(*tracerKind)
+	trc, closer := jaeger.New(viper.GetString("tracer"), viper.GetString("tracer_sampler_url"), viper.GetString("tracer_reporter_url"))
 	defer closer.Close()
 
 	tracerOpts := []grpc_opentracing.Option{
@@ -82,26 +57,19 @@ func run() error {
 	)
 
 	// Register the event gateway
-	if err := egw.RegisterEventServiceHandlerFromEndpoint(ctx, mux, *eventAddr, opts); err != nil {
+	if err := egw.RegisterEventServiceHandlerFromEndpoint(ctx, mux, viper.GetString("event_addr"), opts); err != nil {
 		return err
 	}
 
 	// Register the photo gateway
-	if err := pgw.RegisterPhotoServiceHandlerFromEndpoint(ctx, mux, *photoAddr, opts); err != nil {
+	if err := pgw.RegisterPhotoServiceHandlerFromEndpoint(ctx, mux, viper.GetString("photo_addr"), opts); err != nil {
 		return err
 	}
 
-	// Create a global validator that is only initialized once
-	auth0Validator = auth0.New(
-		auth0.Audience(*auth0APIAudience),
-		auth0.JWKSURI(*jwksURI),
-		auth0.Issuer(*auth0APIIssuer),
-	)
-
-	log.Printf("event_service = %s\n", *eventAddr)
-	log.Printf("photo_service = %s\n", *photoAddr)
-	log.Printf("listening to port *%s. press ctrl + c to cancel.\n", *port)
-	return http.ListenAndServe(*port, cors.New(mux))
+	log.Printf("event_service = %s\n", viper.GetString("event_addr"))
+	log.Printf("photo_service = %s\n", viper.GetString("photo_addr"))
+	log.Printf("listening to port *%s. press ctrl + c to cancel.\n", viper.GetString("port"))
+	return http.ListenAndServe(viper.GetString("port"), cors.New(mux))
 }
 
 func main() {
@@ -113,6 +81,13 @@ func main() {
 
 // AuthClientInterceptor is a middleware to carry out authorization
 func AuthClientInterceptor() grpc.UnaryClientInterceptor {
+	var auth0Validator *auth0.Auth0
+	// Create a global validator that is only initialized once
+	auth0Validator = auth0.New(
+		auth0.Audience(viper.GetString("auth0_aud")),
+		auth0.JWKSURI(viper.GetString("auth0_jwk")),
+		auth0.Issuer(viper.GetString("auth0_iss")),
+	)
 	return func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 		span := jaeger.NewSpanFromContext(ctx, "jwt")
 		defer span.Finish()
@@ -186,6 +161,7 @@ func fetchUserDetails(parentSpan opentracing.Span, auth string) (metadata.MD, er
 	}
 	span.LogEvent("extract_metadata")
 	if email, ok := userinfo["email"]; ok {
+		whitelist := viper.GetStringSlice("auth0_whitelist")
 		if len(whitelist) > 0 {
 			for _, v := range whitelist {
 				if v == email {

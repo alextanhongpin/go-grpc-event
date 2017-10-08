@@ -52,3 +52,4 @@ compile:
 	
 # NOTE: when building for linode, you do not need the goarch
 # CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o app
+

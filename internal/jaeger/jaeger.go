@@ -13,14 +13,15 @@ import (
 	"github.com/uber/jaeger-client-go/config"
 )
 
-func New(tracerKind string) (opentracing.Tracer, io.Closer) {
+// New returns a new instance of jaeger tracer
+func New(tracerNS, samplingURL, reporterURL string) (opentracing.Tracer, io.Closer) {
 	// zipkinPropagator := zipkin.NewZipkinB3HTTPHeaderPropagator()
 	// injector := jaeger.TracerOptions.Injector(opentracing.HTTPHeaders, zipkinPropagator)
 	// extractor := jaeger.TracerOptions.Extractor(opentracing.HTTPHeaders, zipkinPropagator)
 	// zipkinSharedRPCSpan := jaeger.TracerOptions.ZipkinSharedRPCSpan(true)
 
 	// return jaeger.NewTracer(
-	// 	tracerKind,
+	// 	tracerNS,
 	// 	jaeger.NewConstSampler(true),
 	// 	jaeger.NewNullReporter(),
 	// 	injector,
@@ -28,21 +29,26 @@ func New(tracerKind string) (opentracing.Tracer, io.Closer) {
 	// 	zipkinSharedRPCSpan,
 	// )
 
+	if samplingURL == "" {
+		samplingURL = "localhost:5775"
+	}
+
 	// works!
 	cfg := config.Configuration{
 		Sampler: &config.SamplerConfig{
-			Type:              "const",
-			Param:             1,
-			SamplingServerURL: "localhost:5775",
+			Type:  "const",
+			Param: 1,
+			// SamplingServerURL: samplingURL,
 		},
 		Reporter: &config.ReporterConfig{
 			LogSpans:            false,
 			BufferFlushInterval: 1 * time.Second,
+			LocalAgentHostPort:  samplingURL,
 		},
 	}
 
 	tracer, closer, err := cfg.New(
-		tracerKind,
+		tracerNS,
 		config.Logger(jaeger.StdLogger),
 		// config.Observer(rpcmetrics.NewObserver(
 		// 	metricsFactory.Namespace("route", nil),

@@ -26,7 +26,7 @@ func main() {
 	//
 	// TRACER
 	//
-	trc, closer := jaeger.New(viper.GetString("tracer"))
+	trc, closer := jaeger.New(viper.GetString("tracer"), viper.GetString("tracer_sampler_url"), viper.GetString("tracer_reporter_url"))
 	defer closer.Close()
 
 	tracerOpts := []grpc_opentracing.Option{
