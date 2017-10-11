@@ -152,12 +152,15 @@ func fetchUserDetails(parentSpan opentracing.Span, auth string) (metadata.MD, er
 	}
 	defer resp.Body.Close()
 
-	userinfo := make(map[string]string) // UserInfo
+	userinfo := make(map[string]interface{}) // UserInfo
 	span.LogEvent("decode_payload")
 	if err = json.NewDecoder(resp.Body).Decode(&userinfo); err != nil {
 		msg := fmt.Sprintf("Error decoding userinfo: %s", err.Error())
 		span.SetTag("error", msg)
 		return md, err
+	}
+	for k, v := range userinfo {
+		userinfo[k] = fmt.Sprintf("%v", v)
 	}
 	span.LogEvent("extract_metadata")
 	if email, ok := userinfo["email"]; ok {

@@ -11,8 +11,8 @@ services:
     environment:
       - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
       - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
-      - MONGO_INITDB_DATABASE=${MONGO_INITDB_ROOT_PASSWORD}
-
+      - MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE}
+    restart: always
   # metabase:
   #   image: metabase/metabase
   #   ports:
@@ -31,14 +31,15 @@ services:
     image: jaegertracing/all-in-one:latest
     ports:
       - 127.0.0.1:5775:5775/udp # Accept zipkin.thrift over compact thrift protocol
-      - 6831:6831/udp # Accept jaeger.thrift ofer compact thrift protocol
+      - 127.0.0.1:6831:6831/udp # Accept jaeger.thrift ofer compact thrift protocol
       - 127.0.0.1:6832:6832/udp # Accept jaeger.thrift over binary thrift protocol
       - 127.0.0.1:5778:5778 # Serve configs
       - 127.0.0.1:16686:16686 # Serve frontend
       - 127.0.0.1:14268:14268 # Accept zipkin.thrift from zipkin senders
-  
+    restart: always
+
   event:
-    image: alextanhongpin/event:1.0.0
+    image: alextanhongpin/event:1.0.1
     ports:
       - 127.0.0.1::8080
     environment:
@@ -48,7 +49,7 @@ services:
       - MGO_PWD=${MONGO_PASS}
       - TRACER=${EVENT_TRACER}
       - TRACER_SAMPLER_URL=jaeger:5775
-      # - TRACER_REPORTER_URL=jaeger:5778
+    restart: always
 
   photo:
     image: alextanhongpin/photo:1.0.0
@@ -61,7 +62,7 @@ services:
       - MGO_PWD=${MONGO_PASS}
       - TRACER=${PHOTO_TRACER}
       - TRACER_SAMPLER_URL=jaeger:5775
-      # - TRACER_REPORTER_URL=jaeger:5778
+    restart: always
 
   gateway:
     image: alextanhongpin/gateway:1.0.0
@@ -77,4 +78,10 @@ services:
       - AUTH0_WHITELIST=${AUTH0_WHITELIST}
       - TRACER=${GATEWAY_TRACER}
       - TRACER_SAMPLER_URL=jaeger:5775
-      # - TRACER_REPORTER_URL=jaeger:5778
+    restart: always
+  
+  webui:
+    image: alextanhongpin/event-webui:1.0.0
+    ports:
+     - 127.0.0.1:31000:8080
+    restart: always

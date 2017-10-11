@@ -1,4 +1,4 @@
-VERSION=1.0.0
+VERSION=1.0.1
 
 # Your dockerhub name
 ORGANIZATION=alextanhongpin
@@ -38,6 +38,11 @@ dev-event:
 	CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o app && \
 	docker build -f Dockerfile.dev -t ${EVENT_REPO}:${VERSION} . && \
 	rm -rf app
+
+	docker tag ${EVENT_REPO}:${VERSION} ${EVENT_REPO}:latest && \
+	docker push ${EVENT_REPO}:${VERSION} && \
+	docker push ${EVENT_REPO}:latest
+
 
 dev-photo:
 	@echo "Building development photo gRPC server"
