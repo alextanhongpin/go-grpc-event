@@ -65,7 +65,7 @@ services:
     restart: always
 
   gateway:
-    image: alextanhongpin/gateway:1.0.0
+    image: alextanhongpin/gateway:1.0.2
     ports:
       - 127.0.0.1:3000:3000
     environment:

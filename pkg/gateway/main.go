@@ -26,6 +26,8 @@ import (
 	pgw "github.com/alextanhongpin/go-grpc-event/proto/photo"
 )
 
+//  -pkg asset
+//go:generate go-bindata-assetfs assets
 // Response represents the payload that is returned on error
 type Response struct {
 	Message string `json:"message"`
@@ -69,7 +71,12 @@ func run() error {
 	log.Printf("event_service = %s\n", viper.GetString("event_addr"))
 	log.Printf("photo_service = %s\n", viper.GetString("photo_addr"))
 	log.Printf("listening to port *%s. press ctrl + c to cancel.\n", viper.GetString("port"))
-	return http.ListenAndServe(viper.GetString("port"), cors.New(mux))
+
+	httpMux := http.NewServeMux()
+	httpMux.Handle("/swagger/", http.StripPrefix("/swagger", http.FileServer(assetFS())))
+	httpMux.Handle("/", mux)
+
+	return http.ListenAndServe(viper.GetString("port"), cors.New(httpMux))
 }
 
 func main() {
@@ -159,19 +166,40 @@ func fetchUserDetails(parentSpan opentracing.Span, auth string) (metadata.MD, er
 		span.SetTag("error", msg)
 		return md, err
 	}
-	for k, v := range userinfo {
-		userinfo[k] = fmt.Sprintf("%v", v)
-	}
+
+	newUserinfo := stringify(userinfo)
+
 	span.LogEvent("extract_metadata")
-	if email, ok := userinfo["email"]; ok {
+	if email, ok := newUserinfo["email"]; ok {
 		whitelist := viper.GetStringSlice("auth0_whitelist")
 		if len(whitelist) > 0 {
 			for _, v := range whitelist {
 				if v == email {
-					userinfo["admin"] = "true"
+					newUserinfo["admin"] = "true"
 				}
 			}
 		}
 	}
-	return metadata.New(userinfo), nil
+	return metadata.New(newUserinfo), nil
 }
+
+func stringify(in map[string]interface{}) map[string]string {
+	out := make(map[string]string)
+	for k, v := range in {
+		out[k] = fmt.Sprintf("%v", v)
+	}
+	return out
+}
+
+// func serveSwagger(w http.ResponseWriter, r *http.Request) {
+// 	if !strings.HasSuffix(r.URL.Path, ".swagger.json") {
+// 		glog.Errorf("Not Found: %s", r.URL.Path)
+// 		http.NotFound(w, r)
+// 		return
+// 	}
+// 	glog.Infof("serving: %s", r.URL.Path)
+// 	p := strings.TrimPrefix(r.URL.Path, "/swagger/")
+// 	p = path.Join(viper.GetString("swagger_dir"), p)
+// 	http.ServeFile(w, r, p)
+
+// }

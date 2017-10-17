@@ -2,14 +2,17 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"time"
+
+	"github.com/spf13/viper"
 )
 
 func main() {
 	// viper.SetEnvPrefix("grpc")
 	// viper.SetTypeByDefaultValue(true)
 	// viper.SetDefault("name", "hello")
-	// viper.BindEnv("name")
+	viper.BindEnv("names")
 	// viper.BindEnv("languages")
 
 	// type Config struct {
@@ -32,4 +35,10 @@ func main() {
 	fmt.Println(time.Now().UTC().Format(time.RFC822))
 	fmt.Println(time.Now().UTC().Format(time.RFC850))
 	fmt.Print(time.Now().Format("2006-01-02 15:04:05 -0700 MST"))
+
+	names := viper.GetStringSlice("names")
+	log.Println(names)
+	for _, v := range names {
+		log.Println("name:", ">"+v+"<")
+	}
 }

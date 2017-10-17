@@ -32,7 +32,14 @@ stub:
 	--gofast_out=plugins=grpc:. \
 	--proto_path=. "{}" \;
 
-# -I${GOPATH}/src/github.com/alextanhongpin/go-grpc-event \
+swagger:
+	find . -name "*.proto" -exec \
+	protoc -I/usr/local/include -I. \
+	-I${GOPATH}/src \
+	-I${GOPATH}/src/github.com/grpc-ecosystem/grpc-gateway/third_party/googleapis \
+	--swagger_out=logtostderr=true:. "{}" \;
+
+	cp proto/**/**.json pkg/gateway/assets/
 
 # gw generates the grpc gateway file from the proto file
 gw:

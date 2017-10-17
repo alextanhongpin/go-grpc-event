@@ -4,7 +4,7 @@ package photo;
 
 import "google/api/annotations.proto";
 // import "google/protobuf/timestamp.proto";
-import "github.com/alextanhongpin/go-grpc-event/proto/user/main.proto";
+import "github.com/alextanhongpin/go-grpc-event/proto/user/user.proto";
 import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 
 service PhotoService {

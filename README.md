@@ -26,12 +26,15 @@ AUTH0_AUD=<AUTH0_ISS>
 AUTH0_WHITELIST=<AUTH0_ISS>
 ```
 
-admin
-beamsplitters3389807&naphthalin
+## Swagger
 
+Swagger definitions are available at
 
-db
-disaffirm9666367!insatiableness
+- /swagger/event.swagger.json
+- /swagger/photo.swagger.json
+- /swagger/user.swagger.json
 
-mongoimport --host 172.17.0.1 --db engineersmy --collection events -u alextanhongpin -p disaffirm9666367\!insatiableness data.json
+## Monitoring
 
+- For serious services, alert immediately
+- Else, just send a daily report of number of errors that occured daily

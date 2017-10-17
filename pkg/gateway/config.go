@@ -16,6 +16,8 @@ func init() {
 	viper.BindEnv("auth0_aud")       // auth0 jwks audience
 	viper.BindEnv("auth0_whitelist") // auth0 whitelisted admin emails
 
+	viper.BindEnv("swagger_dir") // The swagger directory
+
 	// Tracer
 	viper.BindEnv("tracer") // opentracing tracer namespace
 	viper.BindEnv("tracer_sampler_url")
@@ -26,4 +28,5 @@ func init() {
 	viper.SetDefault("tracer", "gateway")
 	viper.SetDefault("tracer_sampler_url", "localhost:5775")
 	viper.SetDefault("tracer_reporter_url", "localhost:6831")
+	viper.SetDefault("swagger_dir", "proto/event/")
 }

@@ -2,7 +2,7 @@ syntax = "proto3";
 package event;
 
 import "google/api/annotations.proto";
-import "github.com/alextanhongpin/go-grpc-event/proto/user/main.proto";
+import "github.com/alextanhongpin/go-grpc-event/proto/user/user.proto";
 import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 
 service EventService {
