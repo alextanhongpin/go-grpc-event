@@ -25,13 +25,3 @@ AUTH0_ISS=<AUTH0_ISS>
 AUTH0_AUD=<AUTH0_ISS>
 AUTH0_WHITELIST=<AUTH0_ISS>
 ```
-
-admin
-beamsplitters3389807&naphthalin
-
-
-db
-disaffirm9666367!insatiableness
-
-mongoimport --host 172.17.0.1 --db engineersmy --collection events -u alextanhongpin -p disaffirm9666367\!insatiableness data.json
-
