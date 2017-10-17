@@ -15,13 +15,15 @@ import (
 
 	"github.com/alextanhongpin/go-grpc-event/internal/database"
 	jaeger "github.com/alextanhongpin/go-grpc-event/internal/jaeger"
+	"github.com/alextanhongpin/go-grpc-event/internal/slack"
 	pb "github.com/alextanhongpin/go-grpc-event/proto/event"
 	pbUser "github.com/alextanhongpin/go-grpc-event/proto/user"
 )
 
 type eventServer struct {
-	db  *database.DB
-	trc opentracing.Tracer
+	db    *database.DB
+	trc   opentracing.Tracer
+	slack *slack.SlackWebhook
 }
 
 func (s eventServer) GetEvents(ctx context.Context, msg *pb.GetEventsRequest) (*pb.GetEventsResponse, error) {
@@ -129,6 +131,11 @@ func (s eventServer) CreateEvent(ctx context.Context, msg *pb.CreateEventRequest
 		msg := fmt.Sprintf("Error inserting data: %s", err.Error())
 		span.SetTag("error", msg)
 		return nil, err
+	}
+
+	if err := s.slack.Send(fmt.Sprintf("A new event *%s* is pending for approval. View it <https://events.engineers.my/admin|here>.", msg.Data.Name)); err != nil {
+		msg := fmt.Sprintf("Error sending slack notification: %s", err.Error())
+		span.SetTag("error", msg)
 	}
 
 	span.LogKV("event_id", id.Hex())

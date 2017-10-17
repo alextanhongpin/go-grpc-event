@@ -39,16 +39,20 @@ services:
     restart: always
 
   event:
-    image: alextanhongpin/event:1.0.1
+    image: alextanhongpin/event:1.0.2
     ports:
       - 127.0.0.1::8080
     environment:
       - PORT=:8080
-      - MGO_HOST=mongo:27017
+      - MGO_HOST=mongo:27017 # Mongo
       - MGO_USR=${MONGO_USER}
       - MGO_PWD=${MONGO_PASS}
-      - TRACER=${EVENT_TRACER}
+      - TRACER=${EVENT_TRACER} # Trace
       - TRACER_SAMPLER_URL=jaeger:5775
+      - SLACK_CHANNEL=${SLACK_CHANNEL} # Slack
+      - SLACK_USERNAME=${SLACK_USERNAME}
+      - SLACK_ICON=${SLACK_ICON}
+      - SLACK_WEBHOOK=${SLACK_WEBHOOK}
     restart: always
 
   photo:

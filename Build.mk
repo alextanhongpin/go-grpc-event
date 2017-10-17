@@ -1,5 +1,5 @@
 GATEWAY_VERSION=1.0.2
-EVENT_VERSION=1.0.1
+EVENT_VERSION=1.0.2
 PHOTO_VERSION=1.0.1
 
 # Your dockerhub name
@@ -42,10 +42,11 @@ dev-event:
 	docker build -f Dockerfile.dev -t ${EVENT_REPO}:${EVENT_VERSION} . && \
 	rm -rf app
 
+	@echo Pushing a new version ${EVENT_REPO}:${EVENT_VERSION} to dockerhub...
 	docker tag ${EVENT_REPO}:${EVENT_VERSION} ${EVENT_REPO}:latest && \
 	docker push ${EVENT_REPO}:${EVENT_VERSION} && \
 	docker push ${EVENT_REPO}:latest
-
+	@echo ${EVENT_REPO}:${EVENT_VERSION} is now available at dockerhub
 
 dev-photo:
 	@echo "Building development photo gRPC server"

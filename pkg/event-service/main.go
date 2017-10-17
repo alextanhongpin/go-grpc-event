@@ -12,6 +12,7 @@ import (
 
 	"github.com/alextanhongpin/go-grpc-event/internal/database"
 	jaeger "github.com/alextanhongpin/go-grpc-event/internal/jaeger"
+	"github.com/alextanhongpin/go-grpc-event/internal/slack"
 	pb "github.com/alextanhongpin/go-grpc-event/proto/event"
 )
 
@@ -68,10 +69,17 @@ func main() {
 			grpc_opentracing.UnaryServerInterceptor(tracerOpts...),
 		)),
 	)
+	slk := slack.New(
+		slack.WebhookURL(viper.GetString("slack_webhook")),
+		slack.IconEmoji(viper.GetString("slack_icon")),
+		slack.Username(viper.GetString("slack_username")),
+		slack.Channel(viper.GetString("slack_channel")),
+	)
 
 	pb.RegisterEventServiceServer(grpcServer, &eventServer{
-		db:  db,
-		trc: trc,
+		db:    db,
+		trc:   trc,
+		slack: slk,
 	})
 
 	log.Printf("listening to port *%s. press ctrl + c to cancel.\n", viper.GetString("port"))
