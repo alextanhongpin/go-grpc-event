@@ -84,8 +84,8 @@ services:
       - TRACER_SAMPLER_URL=jaeger:5775
     restart: always
   
-  webui:
-    image: alextanhongpin/event-webui:1.0.0
-    ports:
-     - 127.0.0.1:31000:8080
-    restart: always
+  # webui:
+  #   image: alextanhongpin/event-webui:1.0.1
+  #   ports:
+  #    - 127.0.0.1:31000:8080
+  #   restart: always
