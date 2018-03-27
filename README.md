@@ -1,5 +1,19 @@
 # go-grpc-event
 
+API backend for the [engineers.my](https://events.engineers.my/home) event page, powered by go gRPC and [OpenTracing](https://trace.engineers.my/search). 
+
+## Architecture
+
+![architecture.png](assets/architecture.png)
+
+## Web UI
+
+![webui.png](assets/webui.png)
+
+## OpenTracing UI
+
+![opentracing.png](assets/opentracing.png)
+
 Ensure you have the following in your `.env` file:
 
 ```bash
